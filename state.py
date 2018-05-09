@@ -59,29 +59,27 @@ class CSGOState:
             # Don't play sounds while spectating
             return
 
+        # "prepare" is never played :(
+        if self.old_phase != phase:
+            print(phase)
+            if phase == 'live':
+                self.sounds.play('prepare.mp3')
+
+        if self.state['round_kills'] != self.round_kills:
+            self.round_kills = self.state['round_kills']
+            if self.round_kills == 2:
+                self.sounds.play('doublekill.mp3')
+            elif self.round_kills == 3:
+                self.sounds.play('triplekill.mp3')
+            elif self.round_kills == 4:
+                self.sounds.play('dominating.mp3')
+            elif self.round_kills == 5:
+                self.sounds.play('wickedsick.mp3')
+
         if self.state['round_killhs'] > self.headshots:
             # Do not play over double kills, etc
             if self.round_kills < 2 or self.round_kills > 5:
                 self.sounds.play('headshot.mp3')
-
-        # "prepare" is never played :(
-        if self.old_phase != phase:
-            print(phase)
-            if phase == 'freezetime':
-                self.sounds.play('prepare.mp3')
-            if phase == 'live':
-                self.sounds.play('play.wav')
-
-        if self.state['round_kills'] != self.round_kills:
-            round_kills = self.state['round_kills']
-            if round_kills == 2:
-                self.sounds.play('doublekill.mp3')
-            elif round_kills == 3:
-                self.sounds.play('triplekill.mp3')
-            elif round_kills == 4:
-                self.sounds.play('dominating.mp3')
-            elif round_kills == 5:
-                self.sounds.play('wickedsick.mp3')
 
         self.old_phase = phase
         self.headshots = self.state['round_killhs']

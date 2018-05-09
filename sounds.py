@@ -5,7 +5,7 @@ import pyglet
 class SoundManager:
     """Loads and plays sounds"""
     def __init__(self):
-        self.samples = []
+        self.samples = {}
 
         filenames = [
             'headshot.mp3',
@@ -27,4 +27,4 @@ class SoundManager:
 
     def load(self, filename):
         """Loads a sound for future playback"""
-        self.samples.append(pyglet.media.load(filename, streaming=False))
+        self.samples[filename] = (pyglet.media.load(filename, streaming=False))
