@@ -1,5 +1,6 @@
 """Related to CSGO Gamestate"""
 from sounds import SoundManager
+from time import sleep
 
 class CSGOState:
     """Follows the CSGO state via gamestate integration"""
@@ -8,8 +9,10 @@ class CSGOState:
         self.headshots = 0
         self.round_kills = 0
         self.mvps = 0
+        self.flashed = 0
         self.old_phase = ''
-        self.state = []
+        self.state = {}
+        self.match_stats = {}
         self.round = False
         self.is_player = False
         self.sounds = SoundManager()
@@ -27,13 +30,10 @@ class CSGOState:
                 self.is_player = True
 
         try:
-            match_stats = player['match_stats']
+            self.match_stats = player['match_stats']
         except KeyError:
             pass
         else:
-            # if match_stats['mvps'] > mvps:
-            #     impressive.play()
-            self.mvps = match_stats['mvps']
             self.update_match_state()
 
         try:
@@ -46,20 +46,19 @@ class CSGOState:
 
     def update_match_state(self):
         """Update the match state"""
+        if self.is_player:
+            if self.match_stats['mvps'] > self.mvps:
+                sleep(1)
+                self.sounds.play('impressive.mp3')
+            self.mvps = self.match_stats['mvps']
 
     def update_player_state(self):
         """Update the player state"""
         if not self.is_player:
-            # Don't play sounds if not ingame
-            return
-
-        phase = self.round['phase'] if self.round else 'unknown'
-        health = self.state['health']
-        if health == 0 or phase == 'freezetime':
             # Don't play sounds while spectating
             return
 
-        # "prepare" is never played :(
+        phase = self.round['phase'] if self.round else 'unknown'
         if self.old_phase != phase:
             print(phase)
             if phase == 'live':
@@ -81,5 +80,9 @@ class CSGOState:
             if self.round_kills < 2 or self.round_kills > 5:
                 self.sounds.play('headshot.mp3')
 
+        if self.state['flashed'] > self.flashed and self.state['flashed'] > 200:
+            self.sounds.play('perfect.mp3')
+
         self.old_phase = phase
         self.headshots = self.state['round_killhs']
+        self.flashed = self.state['flashed']
