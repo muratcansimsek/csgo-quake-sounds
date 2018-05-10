@@ -16,6 +16,7 @@ class SoundManager:
             'triplekill.mp3',
             'dominating.mp3',
             'wickedsick.mp3',
+            'humiliation.wav',
         ]
 
         for filename in filenames:
