@@ -2,7 +2,6 @@
 from flask import Flask, request
 from state import CSGOState
 
-GAMESTATE = CSGOState()
 APP = Flask(__name__)
 @APP.route("/", methods=["POST"])
 def main():
@@ -10,6 +9,8 @@ def main():
     GAMESTATE.update(request.json)
     return 'k'
 
-if __name__ == "__main__":
-    print('Running')
-    APP.run(port=3000)
+print('\r\n           - Keep this window open while CSGO is running -')
+print('Reminder : you need to copy gamestate_integration_quake.cfg into csgo/cfg\r\n')
+
+GAMESTATE = CSGOState()
+APP.run(port=3000)
