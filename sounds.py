@@ -1,30 +1,28 @@
 """Related to sounds"""
 
 import pyglet
+from os import walk
 
 class SoundManager:
     """Loads and plays sounds"""
     def __init__(self):
         self.samples = {}
 
-        filenames = [
-            'headshot.mp3',
-            'play.wav',
-            'prepare.mp3',
-            'impressive.mp3',
-            'doublekill.mp3',
-            'triplekill.mp3',
-            'dominating.mp3',
-            'wickedsick.mp3',
-            'humiliation.wav',
-        ]
+        filenames = []
+        for (_, _, files) in walk('sounds'):
+            filenames.extend(files)
 
         for filename in filenames:
             self.load('sounds/' + filename)
 
     def play(self, sound):
         """Plays a loaded sound"""
-        self.samples['sounds/' + sound].play()
+        for name, sample in self.samples.items():
+            if name.startswith('sounds/' + sound):
+                sample.play()
+                return
+        
+        print('Sound not found : ' + sound)
 
     def load(self, filename):
         """Loads a sound for future playback"""

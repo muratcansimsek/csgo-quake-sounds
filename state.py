@@ -9,7 +9,6 @@ class CSGOState:
         self.headshots = 0
         self.round_kills = 0
         self.mvps = 0
-        self.flashed = 0
         self.old_phase = ''
         self.state = {}
         self.match_stats = {}
@@ -49,7 +48,7 @@ class CSGOState:
         if self.is_player:
             if self.match_stats['mvps'] > self.mvps:
                 sleep(1)
-                self.sounds.play('impressive.mp3')
+                self.sounds.play('mvp')
             self.mvps = self.match_stats['mvps']
 
     def update_player_state(self):
@@ -62,27 +61,23 @@ class CSGOState:
         if self.old_phase != phase:
             print(phase)
             if phase == 'live':
-                self.sounds.play('prepare.mp3')
+                self.sounds.play('ready')
 
         if self.state['round_kills'] != self.round_kills:
             self.round_kills = self.state['round_kills']
             if self.round_kills == 2:
-                self.sounds.play('doublekill.mp3')
+                self.sounds.play('2kills')
             elif self.round_kills == 3:
-                self.sounds.play('triplekill.mp3')
+                self.sounds.play('3kills')
             elif self.round_kills == 4:
-                self.sounds.play('dominating.mp3')
+                self.sounds.play('4kills')
             elif self.round_kills == 5:
-                self.sounds.play('wickedsick.mp3')
+                self.sounds.play('5kills')
 
         if self.state['round_killhs'] > self.headshots:
             # Do not play over double kills, etc
             if self.round_kills < 2 or self.round_kills > 5:
                 self.sounds.play('headshot.mp3')
 
-        if self.state['flashed'] > self.flashed and self.state['flashed'] > 200:
-            self.sounds.play('perfect.mp3')
-
         self.old_phase = phase
         self.headshots = self.state['round_killhs']
-        self.flashed = self.state['flashed']
