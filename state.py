@@ -48,7 +48,7 @@ class CSGOState:
         if self.is_player:
             if self.match_stats['mvps'] > self.mvps:
                 sleep(1)
-                self.sounds.play('mvp')
+                self.sounds.playMvp()
             self.mvps = self.match_stats['mvps']
 
     def update_player_state(self):
