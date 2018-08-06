@@ -1,19 +1,28 @@
 """Related to sounds"""
 
 import pyglet
+import random
 from os import walk
 
 class SoundManager:
     """Loads and plays sounds"""
     def __init__(self):
         self.samples = {}
+        self.mvps = []
 
-        filenames = []
+        # Load sounds regardless of file extension
         for (_, _, files) in walk('sounds'):
-            filenames.extend(files)
+            for filename in files:
+                self.load('sounds/' + filename)
+        
+        # Load all mvp sounds from the "mvps" folder
+        for (_, _, files) in walk('mvps'):
+            for filename in files:
+                self.mvps.append(pyglet.media.load('mvps/' + filename, streaming=False))
 
-        for filename in filenames:
-            self.load('sounds/' + filename)
+    def playMvp(self):
+        """Plays a random sound from the mvps folder"""
+        random.choice(self.mvps).play()
 
     def play(self, sound):
         """Plays a loaded sound"""
