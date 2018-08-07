@@ -13,11 +13,13 @@ class SoundManager:
         # Load sounds regardless of file extension
         for (_, _, files) in walk('sounds'):
             for filename in files:
+                print('Adding sound ' + filename)
                 self.load('sounds/' + filename)
         
         # Load all mvp sounds from the "mvps" folder
         for (_, _, files) in walk('mvps'):
             for filename in files:
+                print('Adding MVP ' + filename)
                 self.mvps.append(pyglet.media.load('mvps/' + filename, streaming=False))
 
     def playMvp(self):

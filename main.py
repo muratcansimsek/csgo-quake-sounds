@@ -9,8 +9,7 @@ def main():
     GAMESTATE.update(request.json)
     return 'k'
 
+GAMESTATE = CSGOState()
 print('\r\n           - Keep this window open while CSGO is running -')
 print('Reminder : you need to copy gamestate_integration_quake.cfg into csgo/cfg\r\n')
-
-GAMESTATE = CSGOState()
 APP.run(port=3000)
