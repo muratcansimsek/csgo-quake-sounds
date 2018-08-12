@@ -48,7 +48,7 @@ class CSGOState:
         if self.is_player:
             if self.match_stats['mvps'] > self.mvps:
                 sleep(1)
-                self.sounds.playMvp()
+                self.sounds.play('mvp')
             self.mvps = self.match_stats['mvps']
 
     def update_player_state(self):
@@ -77,7 +77,7 @@ class CSGOState:
         if self.state['round_killhs'] > self.headshots:
             # Do not play over double kills, etc
             if self.round_kills < 2 or self.round_kills > 5:
-                self.sounds.play('headshot.mp3')
+                self.sounds.play('headshot')
 
         self.old_phase = phase
         self.headshots = self.state['round_killhs']
