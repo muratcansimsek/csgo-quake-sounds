@@ -18,6 +18,8 @@ Yes. Feel free to remove the ones you don't like, too.
 
 ### Installation
 
+* Install [AVbin](https://github.com/AVbin/AVbin/downloads) [(direct link)](https://github.com/downloads/AVbin/AVbin/AVbin11alpha4-win64.exe)
+
 * Copy gamestate_integration_quake.cfg into csgo/cfg
 
 * Run the installer from the [releases page](https://github.com/kiwec/csgo-quake-sounds/releases) or clone this repository and run the following :

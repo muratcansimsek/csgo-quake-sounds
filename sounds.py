@@ -2,39 +2,41 @@
 
 import pyglet
 import random
-from os import walk
+import os
+
+class Sample:
+    """Represents a sample or sample collection"""
+    def __init__(self, path):
+        self.name = path
+        self.samples = []
+
+        if os.path.isfile(path):
+            print("+ " + path)
+            self.samples.append(pyglet.media.load(path, streaming=False))
+        else:
+            print(path + " ->")
+            for file in os.listdir(path):
+                complete_path = path + '/' + file
+                print("   + " + complete_path)
+                self.samples.append(pyglet.media.load(complete_path, streaming=False))
+
+    def play(self):
+        """Plays a random sample"""
+        random.choice(self.samples).play()
 
 class SoundManager:
     """Loads and plays sounds"""
     def __init__(self):
-        self.samples = {}
-        self.mvps = []
+        self.samples = []
 
-        # Load sounds regardless of file extension
-        for (_, _, files) in walk('sounds'):
-            for filename in files:
-                print('Adding sound ' + filename)
-                self.load('sounds/' + filename)
-        
-        # Load all mvp sounds from the "mvps" folder
-        for (_, _, files) in walk('mvps'):
-            for filename in files:
-                print('Adding MVP ' + filename)
-                self.mvps.append(pyglet.media.load('mvps/' + filename, streaming=False))
-
-    def playMvp(self):
-        """Plays a random sound from the mvps folder"""
-        random.choice(self.mvps).play()
+        for path in os.listdir('sounds'):
+            self.samples.append(Sample('sounds/' + path))
 
     def play(self, sound):
         """Plays a loaded sound"""
-        for name, sample in self.samples.items():
-            if name.startswith('sounds/' + sound):
+        for sample in self.samples:
+            if sample.name.startswith('sounds/' + sound):
                 sample.play()
                 return
         
         print('Sound not found : ' + sound)
-
-    def load(self, filename):
-        """Loads a sound for future playback"""
-        self.samples[filename] = (pyglet.media.load(filename, streaming=False))
