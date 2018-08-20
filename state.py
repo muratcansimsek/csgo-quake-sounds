@@ -64,7 +64,11 @@ class PlayerState:
 
         # Updates only at round end
         if self.phase == 'over':
-            self.won_round = round['win_team'] == player['team']
+            try:
+                self.won_round = round['win_team'] == player['team']
+            except KeyError:
+                # Player has not yet joined a team
+                self.won_round = False
 
         # ------------------------------------------------------------
 
