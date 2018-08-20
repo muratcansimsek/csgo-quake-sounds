@@ -23,6 +23,12 @@ class PlayerState:
 
         # Is the GameState tracking local player or spectated player
         self.is_local_player = provider['steamid'] == player['steamid']
+        self.is_ingame = player['activity'] != 'menu'
+
+        # Don't try to get ingame state
+        if not self.is_ingame:
+            self.valid = True
+            return
         
         try:
             map = json.get('map', {})
@@ -30,15 +36,20 @@ class PlayerState:
             match_stats = player['match_stats']
             state = player['state']
         except KeyError as err:
+            print('Invalid json :')
             print(err)
+            print(json)
             return
 
         self.flash_opacity = state['flashed']
         self.is_knife_active = False
         for weapon in player['weapons']:
             weapon = player['weapons'][weapon]
-            if weapon['type'] == 'Knife' and weapon['state'] == 'active':
-                self.is_knife_active = True
+            # Taser has no 'type' so we have to check for its name
+            if weapon['name'] == 'weapon_taser':
+                self.is_knife_active = weapon['state'] == 'active'
+            elif weapon['type'] == 'Knife':
+                self.is_knife_active = weapon['state'] == 'active'
         self.mvps = match_stats['mvps']
         self.phase = round['phase'] if round else 'unknown'
         self.remaining_timeouts = map['team_ct']['timeouts_remaining'] + map['team_t']['timeouts_remaining']
@@ -46,18 +57,17 @@ class PlayerState:
         self.round_headshots = state['round_killhs']
         self.total_deaths = match_stats['deaths']
         self.total_kills = match_stats['kills']
-        self.won_round = round['win_team'] == player['team'] if self.phase == 'over' else False
 
+        # Updates only at round end
+        if self.phase == 'over':
+            self.won_round = round['win_team'] == player['team']
+
+        print(self.phase)
         self.valid = True
 
     def compare(self, old_state):
-        if not self.valid:
-            return
-
-        # Init gamestate without playing any sounds
-        if not old_state:
-            return
-        if not old_state.valid:
+        # Init state without playing sounds
+        if not old_state or not old_state.is_ingame:
             return
         
         # Lost kills - either teamkilled or suicided
@@ -69,15 +79,15 @@ class PlayerState:
         # Didn't suicide or teamkill -> check if player just died
         elif self.total_deaths == old_state.total_deaths + 1:
             sounds.play('Death')
-        
-        # Play timeout music
-        if self.remaining_timeouts == old_state.remaining_timeouts - 1:
-            sounds.play('Timeout')
 
         # New phase
         if self.phase != old_state.phase:
             if self.phase == 'live':
                 sounds.play('Round start')
+            elif self.phase == 'freezetime':
+                # Play timeout music
+                if self.remaining_timeouts == old_state.remaining_timeouts - 1:
+                    sounds.play('Timeout')
             elif self.phase == 'over':
                 if self.mvps == old_state.mvps + 1:
                     sleep(1)
@@ -129,11 +139,16 @@ class CSGOState:
     def update(self, json):
         """Update the entire game state"""
         newstate = PlayerState(json)
+
+        # Ignore invalid states
         if not newstate.valid:
             return
-        if not newstate.is_local_player:
-            # Don't run when spectating other players
-            return
 
-        newstate.compare(self.old_state)
-        self.old_state = newstate
+        if newstate.is_ingame:
+            # Only track state on local player
+            if newstate.is_local_player:
+                newstate.compare(self.old_state)
+                self.old_state = newstate
+        else:
+            # Reset state in main menu
+            self.old_state = None
