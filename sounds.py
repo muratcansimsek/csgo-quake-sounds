@@ -22,7 +22,9 @@ class Sample:
 
     def play(self):
         """Plays a random sample"""
-        random.choice(self.samples).play()
+        print("Playing " + self.name)
+        if len(self.samples) > 0:
+            random.choice(self.samples).play()
 
 class SoundManager:
     """Loads and plays sounds"""
