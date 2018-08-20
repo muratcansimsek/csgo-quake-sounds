@@ -22,6 +22,8 @@ class CSGOState:
         if not player:
             return
 
+        print(json)
+
         self.is_player = False
         provider = json.get('provider', {})
         if provider:
