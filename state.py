@@ -58,11 +58,16 @@ class PlayerState:
         self.total_deaths = match_stats['deaths']
         self.total_kills = match_stats['kills']
 
+        # ------------------------------------------------------------
+        # Below, only states that can't be compared to previous states
+        # ------------------------------------------------------------
+
         # Updates only at round end
         if self.phase == 'over':
             self.won_round = round['win_team'] == player['team']
 
-        print(self.phase)
+        # ------------------------------------------------------------
+
         self.valid = True
 
     def compare(self, old_state):
@@ -70,6 +75,10 @@ class PlayerState:
         if not old_state or not old_state.is_ingame:
             return
         
+        # Reset state after warmup
+        if self.phase != 'unknown' and old_state.phase == 'unknown':
+            return
+
         # Lost kills - either teamkilled or suicided
         if self.total_kills < old_state.total_kills:
             if self.total_deaths == old_state.total_deaths + 1:
@@ -80,6 +89,11 @@ class PlayerState:
         elif self.total_deaths == old_state.total_deaths + 1:
             sounds.play('Death')
 
+        # Play MVP music
+        if self.mvps == old_state.mvps + 1:
+            sleep(1)
+            sounds.play('MVP')
+
         # New phase
         if self.phase != old_state.phase:
             if self.phase == 'live':
@@ -89,11 +103,8 @@ class PlayerState:
                 if self.remaining_timeouts == old_state.remaining_timeouts - 1:
                     sounds.play('Timeout')
             elif self.phase == 'over':
-                if self.mvps == old_state.mvps + 1:
-                    sleep(1)
-                    sounds.play('MVP')
-                else:
-                    sleep(1)
+                # NOTE : this check is useless since mvp and round win aren't in sync
+                if self.mvps == old_state.mvps:
                     sounds.play('Round win' if self.won_round else 'Round lose')
         
         # Player got flashed

@@ -16,6 +16,9 @@ class Sample:
         else:
             print(path + " ->")
             for file in os.listdir(path):
+                # Ignore .gitkeep, .gitignore, etc
+                if file.startswith('.git'):
+                    continue
                 complete_path = path + '/' + file
                 print("   + " + complete_path)
                 self.samples.append(pyglet.media.load(complete_path, streaming=False))
