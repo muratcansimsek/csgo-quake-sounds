@@ -1,16 +1,12 @@
 """Related to CSGO Gamestate"""
-from sounds import SoundManager
-from time import sleep
+from sounds import sounds
 
-sounds = SoundManager()
+from config import HEADSHOTS_OVERRIDE
 
 class PlayerState:
     def __init__(self, json):
-        # Set this to True to override "double kill"-type sounds with "Headshot" if headshot
-        self.headshots_override = False
-
         self.valid = False
-        
+
         provider = json.get('provider', {})
         if not provider:
             # Not ingame
@@ -22,19 +18,24 @@ class PlayerState:
             return
 
         # Is the GameState tracking local player or spectated player
-        self.is_local_player = provider['steamid'] == player['steamid']
+        self.steamid = provider['steamid']
+        self.playerid = player['steamid']
+        self.is_local_player = self.steamid == self.playerid
         self.is_ingame = player['activity'] != 'menu'
+
+        # NOTE : this is modified in compare()
+        self.play_timeout = False
 
         # Don't try to get ingame state
         if not self.is_ingame:
-            self.valid = True
             return
-        
+
         try:
             map = json.get('map', {})
             round = json.get('round', {})
             match_stats = player['match_stats']
             state = player['state']
+            self.current_round = map['round']
         except KeyError as err:
             print('Invalid json :')
             print(err)
@@ -78,78 +79,98 @@ class PlayerState:
         # Init state without playing sounds
         if not old_state or not old_state.is_ingame:
             return
-        
+
+        # Ignore warmup
+        if self.phase == 'warmup':
+            print('[*] New match')
+            return
+
         # Reset state after warmup
         if self.phase != 'unknown' and old_state.phase == 'unknown':
+            print('[*] End of warmup')
             return
+
+        # Check if we should play timeout
+        if not self.play_timeout:
+            self.play_timeout = old_state.play_timeout
+        if self.remaining_timeouts == old_state.remaining_timeouts - 1:
+            self.play_timeout = True
+            print('[*] Timeout sound queued for next freezetime')
+
+        # Play timeout music
+        if self.phase == 'freezetime' and self.play_timeout:
+            sounds.send('Timeout', 'global')
+            self.play_timeout = False
+
+        # Reset state when switching players (used for MVPs)
+        if self.playerid != old_state.playerid:
+            print('[*] Different player')
+            return
+
+        # Play round start, win, lose, MVP
+        if self.is_local_player and self.mvps == old_state.mvps + 1:
+            sounds.send('MVP', 'global')
+        elif self.phase != old_state.phase:
+            if self.phase == 'over' and self.mvps == old_state.mvps:
+                sounds.send('Round win' if self.won_round else 'Round lose', 'global')
+            elif self.phase == 'live':
+                sounds.send('Round start', 'global')
+
+        # Don't play player-triggered sounds below this ##########
+        if not self.is_local_player:
+            return
+        ##########################################################
 
         # Lost kills - either teamkilled or suicided
         if self.total_kills < old_state.total_kills:
             if self.total_deaths == old_state.total_deaths + 1:
-                sounds.play('Suicide')
-            else:
-                sounds.play('Teamkill')
+                sounds.send('Suicide', 'rare')
+            elif self.total_deaths == old_state.total_deaths:
+                sounds.send('Teamkill', 'rare')
         # Didn't suicide or teamkill -> check if player just died
         elif self.total_deaths == old_state.total_deaths + 1:
-            sounds.play('Death')
+            sounds.send('Death', self.steamid)
 
-        # Play MVP music
-        if self.mvps == old_state.mvps + 1:
-            sleep(1)
-            sounds.play('MVP')
-
-        # New phase
-        if self.phase != old_state.phase:
-            if self.phase == 'live':
-                sounds.play('Round start')
-            elif self.phase == 'freezetime':
-                # Play timeout music
-                if self.remaining_timeouts == old_state.remaining_timeouts - 1:
-                    sounds.play('Timeout')
-            elif self.phase == 'over':
-                # NOTE : this check is useless since mvp and round win aren't in sync
-                if self.mvps == old_state.mvps:
-                    sounds.play('Round win' if self.won_round else 'Round lose')
-        
         # Player got flashed
         if self.flash_opacity > 100 and self.flash_opacity > old_state.flash_opacity:
-            sounds.play('Flashed')
-        
+            sounds.send('Flashed', self.steamid)
+
         # Player killed someone
         if self.round_kills == old_state.round_kills + 1:
             # Kill with knife equipped
             if self.is_knife_active:
-                sounds.play('Unusual kill')
+                sounds.send('Unusual kill', 'rare')
             # Kill with weapon equipped
             else:
                 # Headshot
                 if self.round_headshots == old_state.round_headshots + 1:
-                    # Always play Headshot
-                    if self.headshots_override:
-                        sounds.play('Headshot')
-                    # Do not play over double kills, etc
-                    elif self.round_kills < 2 or self.round_kills > 5:
-                        sounds.play('Headshot')
-                # Bodyshot
-                else:
-                    if self.round_kills == 2:
-                        sounds.play('2 kills')
-                    elif self.round_kills == 3:
-                        sounds.play('3 kills')
-                    elif self.round_kills == 4:
-                        sounds.play('4 kills')
-                    elif self.round_kills == 5:
-                        sounds.play('5 kills')
+                    # Headshot override : always play Headshot
+                    if HEADSHOTS_OVERRIDE:
+                        sounds.send('Headshot', self.steamid)
+                        return
+                    # No headshot override : do not play over double kills, etc
+                    if self.round_kills < 2 or self.round_kills > 5:
+                        sounds.send('Headshot', self.steamid)
+
+                # Killstreaks, headshotted or not
+                if self.round_kills == 2:
+                    sounds.send('2 kills', self.steamid)
+                elif self.round_kills == 3:
+                    sounds.send('3 kills', self.steamid)
+                elif self.round_kills == 4:
+                    sounds.send('4 kills', 'rare')
+                elif self.round_kills == 5:
+                    sounds.send('5 kills', 'rare')
         # Player killed multiple players
         elif self.round_kills > old_state.round_kills:
-            sounds.play('Collateral')
-
+            sounds.send('Collateral', 'rare')
 
 class CSGOState:
     """Follows the CSGO state via gamestate integration"""
 
     def __init__(self):
         self.old_state = None
+        self.round_globals = []
 
     def update(self, json):
         """Update the entire game state"""
@@ -160,10 +181,15 @@ class CSGOState:
             return
 
         if newstate.is_ingame:
-            # Only track state on local player
-            if newstate.is_local_player:
-                newstate.compare(self.old_state)
-                self.old_state = newstate
+            sounds.playerid = newstate.playerid
+            if self.old_state and newstate.current_round != self.old_state.current_round:
+                sounds.round_globals = []
+
+            # Play sounds and update state
+            newstate.compare(self.old_state)
+            self.old_state = newstate
         else:
             # Reset state in main menu
             self.old_state = None
+            sounds.playerid = None
+

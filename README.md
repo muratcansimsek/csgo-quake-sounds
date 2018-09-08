@@ -14,13 +14,19 @@ No.
 
 Yes.
 
+* Why can't my spectating friends hear my sounds ?
+
+You have to setup a sound server - follow the instructions in server.py.
+
 * Can I add my own sounds ?
 
 Yes. Feel free to remove the ones you don't like, too.
 
+However, if you play with a sound server, make sure everyone has the same sounds folder, or sometimes nothing will play.
+
 ### Running
 
-If you don't to use the installer, do the following :
+If you don't want to use the installer, do the following :
 
 * Install [AVbin](https://github.com/AVbin/AVbin/downloads)
 
@@ -36,7 +42,7 @@ Then, run it :
 
 * `python3 main.py`
 
-### Compiling (installer)
+### Building (installer)
 
 pynsist doesn't allow a lot of customization so follow these instructions :
 
