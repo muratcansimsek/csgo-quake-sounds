@@ -3,7 +3,6 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import server
-from sounds import sounds
 from state import CSGOState
 
 
@@ -31,12 +30,9 @@ class PostHandler(BaseHTTPRequestHandler):
 gamestate_server = HTTPServer(('127.0.0.1', 3000), PostHandler)
 gamestate_thread = threading.Thread(target=gamestate_server.serve_forever, daemon=True)
 
-# Local sound client
-sound_client_thread = threading.Thread(target=sounds.listen, daemon=True)
 # Local sound server
 sound_server_thread = threading.Thread(target=server.serve, daemon=True)
 
 def start():
     gamestate_thread.start()
-    sound_client_thread.start()
     sound_server_thread.start()

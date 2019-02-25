@@ -42,6 +42,8 @@ Then, run it :
 
 * `python3 main.py`
 
+Please note that due to the use of Blake2 for file hashing, Python 3.6+ is *required*.
+
 ### Building (installer)
 
 pynsist doesn't allow a lot of customization so follow these instructions :

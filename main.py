@@ -3,12 +3,16 @@ import os
 from steamfiles import acf
 import subprocess
 import sys
+import threading
 import winreg
 import wx
 from shutil import copyfile
 
+import time
+
 # Local files
-import gui, threads
+import gui
+from sounds import sounds
 
 # Get steam path from windows registry - TODO linux
 def get_steam_path():
@@ -31,9 +35,6 @@ if __name__ == "__main__":
 	# TODO linux
 	csgo_dir = get_csgo_path(get_steam_path() + "\\steamapps")
 	copyfile("gamestate_integration_ccs.cfg", csgo_dir + "\\csgo\\cfg\\gamestate_integration_ccs.cfg")
-
-	# Start client and servers
-	threads.start()
 
 	app = wx.App()
 	frame = gui.MainFrame(None, title="CSGO Custom Sounds", size=wx.Size(500, 300), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))

@@ -1,5 +1,5 @@
 """Related to sounds"""
-
+import hashlib
 import pyglet
 import random
 import os
@@ -8,43 +8,29 @@ from time import sleep
 
 from config import SOUND_SERVER_IP
 
-class Sample:
-    """Represents a sample or sample collection"""
+class SampleCollection:
+    """Represents a sample collection (e.g. Double kill, Headshot, etc)"""
     def __init__(self, path):
         self.name = path
         self.samples = {}
 
-        if os.path.isfile(path):
-            print('Added "' + path + '" as folder.')
-            self.samples[path] = pyglet.media.load(path, streaming=False)
-        else:
-            print('In folder "' + path + '" :')
-            for file in os.listdir(path):
-                # Ignore .gitkeep, .gitignore, etc
-                if file.startswith('.git'):
-                    continue
-                # Ignore windows bullshit
-                if file == 'desktop.ini':
-                    continue
-                complete_path = path + '/' + file
-                try:
-                    self.samples[file] = pyglet.media.load(complete_path, streaming=False)
-                    print(" + " + file)
-                except Exception as e:
-                    print(" ! Failed to load \"" + file + "\": " + str(e))
-
-            # Notify if there are no sounds in the folder        
-            if len(self.samples) == 0:
-                print('   <nothing>')
+    def load(self, filename_list, thread):
+        """Loads the sound list"""
+        for filename in filename_list:
+            hash = hashlib.blake2b()
+            with open(filename, 'rb') as infile:
+                hash.update(infile.read())
+            try:
+                digest = hash.hexdigest()
+                self.samples[digest] = pyglet.media.load(filename, streaming=False)
+                print(" + " + filename + ": " + digest)
+            except Exception as e:
+                print(" ! Failed to load \"" + filename + "\": " + str(e))
+            thread.update_status()
 
     def get_random_index(self):
         if len(self.samples) > 0:
-            index = random.randint(0, len(self.samples) - 1)
-            i = 0
-            for key in self.samples.keys():
-                if i == index:
-                    return key
-                i = i + 1
+            return random.choice(self.samples.keys())
         print('[!] Folder "' + self.name + '" has no samples loaded.')
         return None
 
@@ -64,7 +50,7 @@ class Sample:
 class SoundManager:
     """Loads and plays sounds"""
     def __init__(self):
-        self.samples = []
+        self.collections = {}
         self.round_globals = []
         self.playerid = None
 
@@ -77,13 +63,36 @@ class SoundManager:
         self.publisher = self.ctx.socket(zmq.PUSH)
         self.publisher.connect('tcp://' + SOUND_SERVER_IP + ':4001')
 
-        print('Loading sounds...')
+    def load(self, thread):
         for path in os.listdir('sounds'):
-            self.samples.append(Sample('sounds/' + path))
+            complete_path = 'sounds/' + path
+            if not os.path.isfile(complete_path):
+                self.collections[path] = SampleCollection(complete_path)
+                self.collections[path].load(self.sound_list(complete_path), thread)
+    
+    def sound_list(self, sounds_dir):
+        """Returns the list of sounds in a directory and its subdirectories"""
+        list = []
+        for path in os.listdir(sounds_dir):
+            complete_path = sounds_dir + '/' + path
+
+            # Ignore .gitkeep, .gitignore, etc
+            if path.startswith('.git'):
+                continue
+
+            if os.path.isfile(complete_path):
+                # Ignore windows bullshit
+                if path == 'desktop.ini':
+                    continue
+                
+                list.append(complete_path)
+            else:
+                list.extend(self.sound_list(complete_path))
+        return list
 
     def get(self, sound):
         """Get a sample from its sound name"""
-        for sample in self.samples:
+        for sample in self.collections:
             if sample.name.startswith('sounds/' + sound):
                 return sample
         print('[!] Folder "' + sound + '" not found, ignoring.')
@@ -134,4 +143,3 @@ class SoundManager:
                 self.publisher.send_json([sound, index, steamid])
 
 sounds = SoundManager()
-

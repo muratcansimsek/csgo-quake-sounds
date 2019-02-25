@@ -1,4 +1,9 @@
+import subprocess
+import threading
 import wx
+
+import threads
+from sounds import sounds
 
 class MainFrame(wx.Frame):
 	def __init__(self, *args, **kw):
@@ -43,6 +48,8 @@ class MainFrame(wx.Frame):
 		addAccountBtn.Disable()
 		accountList.Disable()
 
+		SampleLoaderThread(self).start()
+
 		self.Bind(wx.EVT_CLOSE, self.OnClose)
 		self.Centre()
 		self.Show()
@@ -66,3 +73,26 @@ class MainFrame(wx.Frame):
 	
 	def OnClose(self, event):
 		self.Destroy()
+
+class SampleLoaderThread(threading.Thread):
+    def __init__(self, gui):
+        threading.Thread.__init__(self, daemon=True)
+        self.gui = gui
+
+    def update_status(self):
+        wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.nb_sounds, self.max_sounds))
+        self.nb_sounds = self.nb_sounds + 1
+    
+    def run(self):
+        self.nb_sounds = 0
+        self.max_sounds = len(sounds.sound_list('sounds'))
+        self.update_status()
+        sounds.load(self)
+        wx.CallAfter(self.gui.SetStatusText, '%d sounds loaded.' % self.max_sounds)
+        
+        # Local sound client
+        sound_client_thread = threading.Thread(target=sounds.listen, daemon=True)
+        sound_client_thread.start()
+
+        # Start the rest of the client/server threads
+        threads.start()
