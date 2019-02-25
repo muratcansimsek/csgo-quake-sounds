@@ -1,48 +1,40 @@
 """Plays quake sounds according to CSGO Gamestate"""
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from sounds import sounds
-from state import CSGOState
-import json
-import os, signal, subprocess, sys, threading
+import os
+from steamfiles import acf
+import subprocess
+import sys
+import winreg
+import wx
+from shutil import copyfile
 
-GAMESTATE = CSGOState()
-recieved_post = False
+# Local files
+import gui, threads
 
-class PostHandler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        content_len = int(self.headers['Content-Length'])
-        body = self.rfile.read(content_len)
-        self.send_response(200)
-        self.end_headers()
+# Get steam path from windows registry - TODO linux
+def get_steam_path():
+	key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\Valve\\Steam", 0, winreg.KEY_READ)
+	value, regtype = winreg.QueryValueEx(key, "InstallPath")
+	winreg.CloseKey(key)
+	return value
 
-        global recieved_post
-        if not recieved_post:
-            print('\r\n[+] CSGO Gamestate Integration is working\r\n')
-            recieved_post = True
-
-        GAMESTATE.update(json.loads(body))
-        return
-    
-    def log_message(self, format, *args):
-        # Do not spam the console with POSTs
-        return
+# TODO linux
+def get_csgo_path(steamapps_folder):
+	appmanifest = steamapps_folder + "\\appmanifest_730.acf"
+	with open(appmanifest, "r") as f:
+		data = acf.load(f)
+	return steamapps_folder + "\\common\\" + data["AppState"]["installdir"]
 
 
-print('\r\n           - Keep this window open while CSGO is running -')
-print('Reminder : you need to copy gamestate_integration_quake.cfg into csgo/cfg\r\n')
+if __name__ == "__main__":
+	# Ensure gamestate integration cfg is in csgo's cfg directory
+	# TODO in case of different install path, scan libraryfolders.vdf directories
+	# TODO linux
+	csgo_dir = get_csgo_path(get_steam_path() + "\\steamapps")
+	copyfile("gamestate_integration_ccs.cfg", csgo_dir + "\\csgo\\cfg\\gamestate_integration_ccs.cfg")
 
-# HTTP Server listening for CSGO Gamestate updates
-server = HTTPServer(('127.0.0.1', 3000), PostHandler)
-threading.Thread(target=server.serve_forever, daemon=True).start()
+	# Start client and servers
+	threads.start()
 
-# Host local sound server
-server = subprocess.Popen([sys.executable, './server.py'], stdout=None)
-
-# Kill local sound server when listener is closed
-def kill_server():
-    server.terminate()
-    server.wait()
-signal.signal(signal.SIGTERM, kill_server)
-
-# Listen for sound server updates
-sounds.listen()
+	app = wx.App()
+	frame = gui.MainFrame(None, title="CSGO Custom Sounds", size=wx.Size(500, 300), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
+	app.MainLoop()

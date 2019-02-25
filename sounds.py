@@ -27,8 +27,11 @@ class Sample:
                 if file == 'desktop.ini':
                     continue
                 complete_path = path + '/' + file
-                print(" + " + file)
-                self.samples[file] = pyglet.media.load(complete_path, streaming=False)
+                try:
+                    self.samples[file] = pyglet.media.load(complete_path, streaming=False)
+                    print(" + " + file)
+                except Exception as e:
+                    print(" ! Failed to load \"" + file + "\": " + str(e))
 
             # Notify if there are no sounds in the folder        
             if len(self.samples) == 0:
