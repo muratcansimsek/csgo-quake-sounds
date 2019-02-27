@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+// Sent to server
+message ChangeSteamID {
+	fixed64 new_id = 1;
+	bytes client_id = 2; // should be 64 bytes
+}
+
+message GamestateUpdate {
+	enum UpdateType {
+		MVP = 0;
+		ROUND_WIN = 1;
+		ROUND_LOSE = 2;
+		SUICIDE = 3;
+		TEAMKILL = 4;
+		DEATH = 5;
+		FLASH = 6;
+		KNIFE = 7;
+		HEADSHOT = 8;
+		KILL = 9;
+		COLLATERAL = 10;
+		ROUND_START = 11;
+		TIMEOUT = 12;
+	}
+
+	UpdateType update = 1;
+	bytes proposed_sound_hash = 2; // should be 64 bytes
+	int32 kill_count = 3;
+}
+
+// TODO ServerUpdate : map, matchid if possible
+
+
+
+// Sent to client
+message PlaySound {
+	fixed64 steamid = 1;
+	bytes sound_hash = 2; // should be 64 bytes
+}
+
+
+// Sent to both
+message PacketInfo {
+	enum PacketType {
+		GAMESTATE_UPDATE = 0;
+		PLAY_SOUND = 1;
+		SOUND_REQUEST = 2;
+		SOUND_RESPONSE = 3;
+		CHANGE_STEAMID = 4;
+	}
+
+	PacketType type = 1;
+	int32 length = 2;
+}
+
+message SoundRequest {
+	repeated bytes sound_hash = 1; // should be 64 bytes
+}
+
+message SoundResponse {
+	bytes data = 1;
+	bytes hash = 2; // should be 64 bytes
+}

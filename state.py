@@ -2,6 +2,7 @@
 from sounds import sounds
 
 from config import HEADSHOTS_OVERRIDE
+from packets_pb2 import UpdateType
 
 class PlayerState:
     def __init__(self, json):
@@ -99,7 +100,7 @@ class PlayerState:
 
         # Play timeout music
         if self.phase == 'freezetime' and self.play_timeout:
-            sounds.send('Timeout', 'global')
+            sounds.send(UpdateType.TIMEOUT, 0)
             self.play_timeout = False
 
         # Reset state when switching players (used for MVPs)
@@ -109,12 +110,12 @@ class PlayerState:
 
         # Play round start, win, lose, MVP
         if self.is_local_player and self.mvps == old_state.mvps + 1:
-            sounds.send('MVP', 'global')
+            sounds.send(UpdateType.MVP, 0)
         elif self.phase != old_state.phase:
             if self.phase == 'over' and self.mvps == old_state.mvps:
-                sounds.send('Round win' if self.won_round else 'Round lose', 'global')
+                sounds.send(UpdateType.ROUND_WIN if self.won_round else UpdateType.ROUND_LOSE, 0)
             elif self.phase == 'live':
-                sounds.send('Round start', 'global')
+                sounds.send(UpdateType.ROUND_START, 0)
 
         # Don't play player-triggered sounds below this ##########
         if not self.is_local_player:
@@ -124,46 +125,46 @@ class PlayerState:
         # Lost kills - either teamkilled or suicided
         if self.total_kills < old_state.total_kills:
             if self.total_deaths == old_state.total_deaths + 1:
-                sounds.send('Suicide', 'rare')
+                sounds.send(UpdateType.SUICIDE, 0)
             elif self.total_deaths == old_state.total_deaths:
-                sounds.send('Teamkill', 'rare')
+                sounds.send(UpdateType.TEAMKILL, 0)
         # Didn't suicide or teamkill -> check if player just died
         elif self.total_deaths == old_state.total_deaths + 1:
-            sounds.send('Death', self.steamid)
+            sounds.send(UpdateType.DEATH, self.steamid)
 
         # Player got flashed
-        if self.flash_opacity > 100 and self.flash_opacity > old_state.flash_opacity:
-            sounds.send('Flashed', self.steamid)
+        if self.flash_opacity > 150 and self.flash_opacity > old_state.flash_opacity:
+            sounds.send(UpdateType.FLASH, self.steamid)
 
         # Player killed someone
         if self.round_kills == old_state.round_kills + 1:
             # Kill with knife equipped
             if self.is_knife_active:
-                sounds.send('Unusual kill', 'rare')
+                sounds.send(UpdateType.KNIFE, 0)
             # Kill with weapon equipped
             else:
                 # Headshot
                 if self.round_headshots == old_state.round_headshots + 1:
                     # Headshot override : always play Headshot
                     if HEADSHOTS_OVERRIDE:
-                        sounds.send('Headshot', self.steamid)
+                        sounds.send(UpdateType.HEADSHOT, self.steamid)
                         return
                     # No headshot override : do not play over double kills, etc
                     if self.round_kills < 2 or self.round_kills > 5:
-                        sounds.send('Headshot', self.steamid)
+                        sounds.send(UpdateType.HEADSHOT, self.steamid)
 
                 # Killstreaks, headshotted or not
                 if self.round_kills == 2:
-                    sounds.send('2 kills', self.steamid)
+                    sounds.send(UpdateType.KILL, self.steamid)
                 elif self.round_kills == 3:
-                    sounds.send('3 kills', self.steamid)
+                    sounds.send(UpdateType.KILL, self.steamid)
                 elif self.round_kills == 4:
-                    sounds.send('4 kills', 'rare')
+                    sounds.send(UpdateType.KILL, 0)
                 elif self.round_kills == 5:
-                    sounds.send('5 kills', 'rare')
+                    sounds.send(UpdateType.KILL, 0)
         # Player killed multiple players
         elif self.round_kills > old_state.round_kills:
-            sounds.send('Collateral', 'rare')
+            sounds.send(UpdateType.COLLATERAL, 0)
 
 class CSGOState:
     """Follows the CSGO state via gamestate integration"""

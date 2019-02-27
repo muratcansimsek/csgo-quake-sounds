@@ -31,7 +31,8 @@ gamestate_server = HTTPServer(('127.0.0.1', 3000), PostHandler)
 gamestate_thread = threading.Thread(target=gamestate_server.serve_forever, daemon=True)
 
 # Local sound server
-sound_server_thread = threading.Thread(target=server.serve, daemon=True)
+server_instance = server.Server()
+sound_server_thread = threading.Thread(target=server_instance.serve, daemon=True)
 
 def start():
     gamestate_thread.start()

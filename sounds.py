@@ -2,11 +2,12 @@
 import hashlib
 import pyglet
 import random
+import socket
 import os
-import zmq
 from time import sleep
 
-from config import SOUND_SERVER_IP
+from config import SOUND_SERVER_IP, SOUND_SERVER_PORT
+from packets_pb2 import PacketInfo, PacketType, GamestateUpdate, UpdateType, PlaySound
 
 class SampleCollection:
     """Represents a sample collection (e.g. Double kill, Headshot, etc)"""
@@ -28,7 +29,7 @@ class SampleCollection:
                 print(" ! Failed to load \"" + filename + "\": " + str(e))
             thread.update_status()
 
-    def get_random_index(self):
+    def get_random_hash(self):
         if len(self.samples) > 0:
             return random.choice(self.samples.keys())
         print('[!] Folder "' + self.name + '" has no samples loaded.')
@@ -54,14 +55,9 @@ class SoundManager:
         self.round_globals = []
         self.playerid = None
 
-        self.ctx = zmq.Context()
-
-        self.subscriber = self.ctx.socket(zmq.SUB)
-        self.subscriber.setsockopt(zmq.SUBSCRIBE, b'')
-        self.subscriber.connect('tcp://' + SOUND_SERVER_IP + ':4000')
-
-        self.publisher = self.ctx.socket(zmq.PUSH)
-        self.publisher.connect('tcp://' + SOUND_SERVER_IP + ':4001')
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((SOUND_SERVER_IP, SOUND_SERVER_PORT))
+        self.sock.setblocking(False)
 
     def load(self, thread):
         for path in os.listdir('sounds'):
@@ -90,56 +86,86 @@ class SoundManager:
                 list.extend(self.sound_list(complete_path))
         return list
 
-    def get(self, sound):
+    def get(self, type, state):
         """Get a sample from its sound name"""
+
+        if type == UpdateType.MVP: sound = 'MVP'
+        elif type == UpdateType.ROUND_WIN: sound = 'Round win'
+        elif type == UpdateType.ROUND_LOSE: sound = 'Round lose'
+        elif type == UpdateType.SUICIDE: sound = 'Suicide'
+        elif type == UpdateType.TEAMKILL: sound = 'Teamkill'
+        elif type == UpdateType.DEATH: sound = 'Death'
+        elif type == UpdateType.FLASH: sound = 'Flashed'
+        elif type == UpdateType.KNIFE: sound = 'Unusual kill'
+        elif type == UpdateType.HEADSHOT: sound = 'Headshot'
+        elif type == UpdateType.KILL: sound = state.round_kills + ' kills'
+        elif type == UpdateType.COLLATERAL: sound = 'Collateral'
+        elif type == UpdateType.ROUND_START: sound = 'Round start'
+        elif type == UpdateType.TIMEOUT: sound = 'Timeout'
+
         for sample in self.collections:
             if sample.name.startswith('sounds/' + sound):
                 return sample
         print('[!] Folder "' + sound + '" not found, ignoring.')
         return None
 
-    def play(self, sound, index):
+    def play(self, hash):
         """Plays a loaded sound"""
         sample = self.get(sound)
         if sample:
             sample.play(index)
 
+    def handle(self, update_type, raw_packet):
+        if update_type == UpdateType.PLAY_SOUND:
+            packet = PlaySound()
+            packet.ParseFromString(raw_packet)
+            # TODO import bytes
+            if packet['steamid'] == self.playerid or packet['steamid'] == 0:
+                self.play(packet['sound_hash'])
+            else:
+                # TODO request sound
+                pass
+        else:
+            print("Unhandled packet type!")
+
     def listen(self):
         while True:
             try:
-                [sound, index, steamid] = self.subscriber.recv_json()
-                print('<- "%s/%s" (%s)' % (sound, index, steamid))
-            except KeyboardInterrupt:
-                break
-            else:
-                if steamid == 'global' and sound not in self.round_globals:
-                    # Avoid playing MVP and round end sounds at the same time
-                    if sound == 'MVP' or sound == 'Round win':
-                        if 'MVP' in self.round_globals or 'Round win' in self.round_globals:
-                            continue
+				# 255 bytes should be more than enough for the PacketInfo message
+				data = self.sock.recv(255)
+				if len(data) == 0:
+					break
+				
+				packet_info = PacketInfo()
+				packet_info.ParseFromString(data)
+				
+				if packet_info['length'] > 2 * 1024 * 1024:
+					# Don't allow files or packets over 2 Mb
+					break
 
-                    # Keep old sound sync
-                    if sound == 'MVP':
-                        self.round_globals.append(sound)
-                        sleep(1)
+				data = self.sock.recv(packet_info['length'])
+				if len(data) == 0:
+					break
+				
+				self.handle(packet_info['type'], data)
+            except ConnectionResetError:
+				break
+            except socket.error as msg:
+				print("Error: " + msg)
+				break
 
-                    self.play(sound, index)
-                    self.round_globals.append(sound)
-                elif steamid == 'rare' or steamid == self.playerid:
-                    self.play(sound, index)
-
-        # Clean up
-        self.publisher.close()
-        self.subscriber.close()
-        self.ctx.term()
-
-    def send(self, sound, steamid):
+    def send(self, update_type, state):
         """Sends a sound to play for everybody"""
-        sample = self.get(sound)
-        if sample:
-            index = sample.get_random_index()
-            if index != None:
-                print('-> "%s/%s" (%s)' % (sound, index, steamid))
-                self.publisher.send_json([sound, index, steamid])
+        collection = self.get(update_type, state)
+        if collection:
+            hash = collection.get_random_hash()
+            if hash != None:
+                print('%d: %s' % (hash, state.steamid))
+                update = GamestateUpdate()
+                update['update'] = update_type
+                update['proposed_sound_hash'] = hash
+                update['kill_count'] = state.round_kills
+                self.sock.send(update.SerializeToString())
+                
 
 sounds = SoundManager()

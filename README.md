@@ -14,17 +14,17 @@ No.
 
 Yes.
 
-* Why can't my spectating friends hear my sounds ?
-
-You have to setup a sound server - follow the instructions in server.py.
-
 * Can I add my own sounds ?
 
 Yes. Feel free to remove the ones you don't like, too.
 
-However, if you play with a sound server, make sure everyone has the same sounds folder, or sometimes nothing will play.
+* What's this networking stuff ?
 
-### Running
+If you play with friends, sounds will be shared when spectating, or on certain rare events.
+
+This allows everyone to use their own custom sounds, without hearing different sounds.
+
+### Running (client)
 
 If you don't want to use the installer, do the following :
 
@@ -32,27 +32,18 @@ If you don't want to use the installer, do the following :
 
 * `git clone https://github.com/kiwec/csgo-quake-sounds.git && cd csgo-quake-sounds`
 
-* `pip3 install -r requirements.txt`
-
-* Copy `gamestate_integration_quake.cfg` into your `csgo/cfg/` directory
-
-By default, on linux it is `~/.steam/steam/steamapps/common/Counter-Strike\ Global\ Offensive/csgo/cfg/`.
+* `pip install -r requirements.txt`
 
 Then, run it :
 
-* `python3 main.py`
+* `python main.py`
 
-Please note that due to the use of Blake2 for file hashing, Python 3.6+ is *required*.
+Please note that your version of Python should be 3.6 or higher.
 
-### Building (installer)
+### Running (server)
 
-pynsist doesn't allow a lot of customization so follow these instructions :
+* Optional: edit config.py
 
-* Run `pynsist installer.cfg --no-makensis`
+* `python server.py`
 
-* Edit `build/nsis/installer.nsi`, replace `SetOutPath "%HOMEDRIVE%\%HOMEPATH%"` with `SetOutPath "$INSTDIR"`
-
-* Add [AVbin](https://github.com/AVbin/AVbin/downloads) as a dependency
-
-* Right click `installer.nsi`, click "Compile NSIS Script"
-
+No dependencies required other than Python 3.6+.
