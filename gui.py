@@ -25,19 +25,10 @@ class MainFrame(wx.Frame):
         self.panel = wx.Panel(self)
         self.SetIcon(wx.Icon("icon.ico"))
 
-        thbox = wx.BoxSizer(wx.HORIZONTAL)
-        thbox.Add(self.make_friends_zone(), border=230, flag=wx.ALIGN_RIGHT | wx.LEFT)
-
-        hbox = wx.BoxSizer(wx.HORIZONTAL)
-        hbox.AddStretchSpacer()
-        hbox.Add(self.make_settings_zone(), border=10, flag=wx.ALIGN_LEFT | wx.ALL)
-        hbox.Add(self.make_account_zone(), border=10, flag=wx.ALIGN_RIGHT | wx.ALL)
-        hbox.AddStretchSpacer()
-
         vbox = wx.BoxSizer(wx.VERTICAL)
         vbox.AddStretchSpacer()
-        vbox.Add(thbox, flag=wx.ALIGN_CENTER_HORIZONTAL)
-        vbox.Add(hbox, flag=wx.ALIGN_CENTER_HORIZONTAL)
+        vbox.Add(self.make_friends_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
+        vbox.Add(self.make_settings_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
         vbox.AddStretchSpacer()
         self.panel.SetSizer(vbox)
         self.panel.Layout()
@@ -57,31 +48,9 @@ class MainFrame(wx.Frame):
         self.Centre()
         self.Show()
     
-    def make_account_zone(self):
-        addAccountBtn = wx.Button(self.panel, label="Add...")
-        self.Bind(wx.EVT_BUTTON, self.AddAccount, addAccountBtn)
-        self.removeAccountBtn = wx.Button(self.panel, label="Remove")
-        self.removeAccountBtn.Disable()
-        self.Bind(wx.EVT_BUTTON, self.RemoveAccount, self.removeAccountBtn)
-        accountsBtns = wx.BoxSizer(wx.HORIZONTAL)
-        accountsBtns.Add(addAccountBtn)
-        accountsBtns.Add(self.removeAccountBtn)
-        
-        accountList = wx.ListBox(self.panel, size=wx.Size(accountsBtns.GetMinSize().GetWidth(), 107), style=wx.LB_SINGLE | wx.LB_SORT)
-        self.Bind(wx.EVT_LISTBOX, self.SelectAccount, accountList)
-        accountsBox = wx.StaticBoxSizer(wx.VERTICAL, self.panel, "Linked accounts")
-        accountsBox.Add(accountList, border=5, flag=wx.LEFT | wx.RIGHT)
-        accountsBox.Add(accountsBtns, border=5, flag=wx.ALL)
-        
-        # TODO
-        addAccountBtn.Disable()
-        accountList.Disable()
-
-        return accountsBox
-    
     def make_friends_zone(self):
         shardCodeBtn = wx.Button(self.panel, label="Set code")
-        shardCodeIpt = wx.TextCtrl(self.panel, value=config.SHARD_CODE, size=(150, shardCodeBtn.GetMinSize().GetHeight()))
+        shardCodeIpt = wx.TextCtrl(self.panel, value=config.SHARD_CODE, size=(164, shardCodeBtn.GetMinSize().GetHeight()))
         shardCodeExplanationTxt = wx.StaticText(self.panel, label="To make sure you are in the same server as your\nfriends, use the same friends code.")
 
         friendsZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Friends code")

@@ -8,7 +8,7 @@ message PacketInfo {
 		PLAY_SOUND = 1;
 		SOUND_REQUEST = 2;
 		SOUND_RESPONSE = 3;
-		CHANGE_STEAMID = 4;
+		CLIENT_UPDATE = 4;
 	}
 
 	Type type = 1;
@@ -46,23 +46,20 @@ message GameEvent {
 	Type update = 1;
 	bytes proposed_sound_hash = 2; // should be 64 bytes
 	int32 kill_count = 3;
+	int32 round = 4;
 }
 
-message GameUpdate {
+message ClientUpdate {
 	enum PlayerStatus {
-		ALIVE = 0;
-		DEAD = 1;
-
 		// Player connects/disconnects from an ingame server
-		CONNECTED = 2;
-		UNCONNECTED = 3;
+		CONNECTED = 0;
+		UNCONNECTED = 1;
 	}
 
 	PlayerStatus status = 1;
 	bytes map = 2;
 	fixed64 steamid = 3;
-	bytes client_id = 4; // should be 64 bytes
-	int32 round = 5;
+	bytes shard_code = 4;
 }
 
 
@@ -70,13 +67,4 @@ message GameUpdate {
 message PlaySound {
 	fixed64 steamid = 1;
 	bytes sound_hash = 2; // should be 64 bytes
-}
-
-message AccountList {
-	message Account {
-		fixed64 steamid = 1;
-		bytes name = 2;
-	}
-
-	repeated Account account = 1;
 }

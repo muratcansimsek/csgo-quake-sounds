@@ -1,11 +1,7 @@
 - Basic client
 - Basic server
 - Sound sharing
-- Player authentication
-    -> We can request_live_game_for_user(accountid) and shard by combining those :
-        - servertime (+/- 10000 ms)
-        - current map
-        - current round (+/- 1)
+- Sharding by map and round (+/- 1)
 - DoS protection
 - Saved config outside of config.py
 

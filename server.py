@@ -1,10 +1,11 @@
 """Sound server used to sync sounds between players"""
+import hashlib
 import os
 import signal
 import socket
 from threading import Lock, Thread
 
-from packets_pb2 import PacketInfo, GameEvent, ChangeSteamID
+from packets_pb2 import PacketInfo, GameEvent, SoundRequest, SoundResponse, ClientUpdate, PlaySound
 from config import SOUND_SERVER_PORT
 
 CLIENT_TIMEOUT = 120
@@ -20,27 +21,99 @@ def print(*a, **b):
 class Client:
 	def __init__(self, server, sock, addr):
 		self.server = server
+		self.sock_lock = Lock()
 		self.sock = sock
 		self.addr = addr
 		self.steamid = 0
+		self.shard_code = ''
+		self.map = ''
+		self.round = 0
+		self.ingame = False
 		
 		self.sock.settimeout(CLIENT_TIMEOUT)
-
-	def update(self, packet):
-		pass
 	
-	def set_steamid(self, packet):
-		pass
+	def get_event_class(self, packet):
+		rare_events = [ GameEvent.Type.MVP, GameEvent.Type.SUICIDE, GameEvent.Type.TEAMKILL, GameEvent.Type.KNIFE, GameEvent.Type.COLLATERAL ]
+		shared_events = [ GameEvent.Type.ROUND_WIN, GameEvent.Type.ROUND_LOSE, GameEvent.Type.ROUND_START, GameEvent.Type.TIMEOUT ]
+		if packet.update in rare_events: return 'rare'
+		if packet.update in shared_events: return 'shared'
+		if packet.update == GameEvent.Type.KILL and packet.kill_count > 3: return 'rare'
+		return 'normal'
+
+	def handle_event(self, packet):
+		self.round = packet.round
+		event_class = self.get_event_class(packet)
+
+		if event_class == 'rare':
+			self.server.play_sound(self, b'', packet.proposed_sound_hash)
+		elif event_class == 'shared':
+			# TODO
+			self.server.play_sound(self, b'', packet.proposed_sound_hash)
+		else:
+			self.server.play_sound(self, self.steamid, packet.proposed_sound_hash)
+	
+	def send_sound(self, packet):
+		with self.server.cache_lock:
+			if not packet.sound_hash in self.server.cache:
+				return
+		
+		with os.open('cache/' + packet.sound_hash) as infile:
+			data = infile.read()
+
+		res = SoundResponse()
+		res.data = data
+		res.hash = packet.sound_hash
+		with self.sock_lock:
+			self.sock.send(res.SerializeToString())
+	
+	def save_sound(self, packet):
+		verif = hashlib.blake2b()
+		verif.update(packet.data)
+		if packet.hash != verif.digest():
+			print("Hashes do not match, dropping file.")
+			return
+
+		with self.server.cache_lock:
+			if packet.hash in self.server.cache:
+				# Sound already saved
+				return
+		with os.open('cache/' + packet.hash) as outfile:
+			outfile.write(packet.data)
+		with self.server.cache_lock:
+			self.server.cache.append(packet.hash)
+		
+	def update(self, packet):
+		self.ingame = packet.status == ClientUpdate.PlayerStatus.CONNECTED
+		self.map = packet.map
+		self.steamid = packet.steamid
+
+		# Update shard code
+		if self.shard_code != packet.shard_code:
+			with self.server.shards_lock:
+				self.server.shards[self.shard_code].remove(self)
+				self.shard_code = packet.shard_code
+				try:
+					self.server.shards[self.shard_code].append(self)
+				except:
+					self.server.shards[self.shard_code] = [self]
 	
 	def handle(self, packet_type, raw_packet):
 		if packet_type == PacketInfo.Type.GAME_EVENT:
 			packet = GameEvent()
 			packet.ParseFromString(raw_packet)
-			self.update(packet)
-		elif packet_type == PacketInfo.Type.ChangeSteamID:
-			packet = ChangeSteamID()
+			self.handle_event(packet)
+		elif packet_type == PacketInfo.Type.SOUND_REQUEST:
+			packet = SoundRequest()
 			packet.ParseFromString(raw_packet)
-			self.set_steamid(packet)
+			self.send_sound(packet)
+		elif packet_type == PacketInfo.Type.SOUND_RESPONSE:
+			packet = SoundResponse()
+			packet.ParseFromString(raw_packet)
+			self.save_sound(packet)
+		elif packet_type == PacketInfo.Type.CLIENT_UPDATE:
+			packet = ClientUpdate()
+			packet.ParseFromString(raw_packet)
+			self.update(packet)
 		else:
 			print(str(self.addr) + ": Unhandled packet type!")
 	
@@ -50,7 +123,8 @@ class Client:
 		while self.server.running:
 			try:
 				# 255 bytes should be more than enough for the PacketInfo message
-				data = self.sock.recv(255)
+				with self.sock_lock:
+					data = self.sock.recv(255)
 				if len(data) == 0:
 					break
 				
@@ -61,7 +135,8 @@ class Client:
 					# Don't allow files or packets over 2 Mb
 					break
 
-				data = self.sock.recv(packet_info['length'])
+				with self.sock_lock:
+					data = self.sock.recv(packet_info['length'])
 				if len(data) == 0:
 					break
 				
@@ -81,6 +156,19 @@ class Server:
 		self.init_sound_cache()
 		self.clients_lock = Lock()
 		self.clients = []
+
+		self.shards_lock = Lock()
+		self.shards = {}
+
+	def play_sound(self, client, steamid, hash):
+		packet = PlaySound()
+		packet.steamid = steamid
+		packet.hash = hash
+		
+		with self.shards_lock:
+			for peer in self.shards[client.shard_code]:
+				with peer.sock_lock:
+					peer.sock.send(packet.SerializeToString())
 
 	def shutdown(self):
 		self.running = False
@@ -110,35 +198,6 @@ class Server:
 
 
 if __name__ == "__main__":
-	from steam import SteamClient
-	from csgo import CSGOClient
-
-	import logging
-
-	logging.basicConfig(format='[%(asctime)s] %(levelname)s %(name)s: %(message)s', level=logging.DEBUG)
-
-	client = SteamClient()
-	cs = CSGOClient(client)
-
-	@client.on('logged_on')
-	def start_csgo():
-		print("Logged on. Launching CS:GO...")
-		cs.launch()
-	
-	@cs.on('csgo_welcome')
-	def cs_ready(evt):
-		print("Launched CS:GO. Scanning profiles :)")
-		print("server acc id : " + str(cs.account_id))
-		print("requesting profile")
-		cs.request_live_game_for_user(76561198198426523 & 0xFFFFFFFF)
-		print("waiting for ev")
-		response, = cs.wait_event('live_game_for_user')
-		print("response: " + str(response))
-	
-	client.cli_login()
-	print("logged in!")
-	client.run_forever()
-
 	server = Server()
 	signal.signal(signal.SIGTERM, server.shutdown)
 	server.serve()
