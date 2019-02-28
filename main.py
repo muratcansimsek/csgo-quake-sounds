@@ -37,5 +37,5 @@ if __name__ == "__main__":
 	copyfile("gamestate_integration_ccs.cfg", csgo_dir + "\\csgo\\cfg\\gamestate_integration_ccs.cfg")
 
 	app = wx.App()
-	frame = gui.MainFrame(None, title="CSGO Custom Sounds", size=wx.Size(500, 300), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
+	frame = gui.MainFrame(None, title="CSGO Custom Sounds", size=wx.Size(550, 250), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
 	app.MainLoop()

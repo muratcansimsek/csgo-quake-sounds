@@ -3,6 +3,7 @@
 - Sound sharing
 - Player authentication
 - DoS protection
+- Saved config outside of config.py
 
 Bonus:
 - Encrypted connection

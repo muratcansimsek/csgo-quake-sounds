@@ -5,9 +5,10 @@ import random
 import socket
 import os
 from time import sleep
+from threading import Lock
 
 from config import SOUND_SERVER_IP, SOUND_SERVER_PORT
-from packets_pb2 import PacketInfo, PacketType, GamestateUpdate, UpdateType, PlaySound
+from packets_pb2 import PacketInfo, GameEvent, PlaySound
 
 class SampleCollection:
     """Represents a sample collection (e.g. Double kill, Headshot, etc)"""
@@ -55,9 +56,9 @@ class SoundManager:
         self.round_globals = []
         self.playerid = None
 
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((SOUND_SERVER_IP, SOUND_SERVER_PORT))
-        self.sock.setblocking(False)
+        self.sock_lock = Lock()
+        self.connected = False
+        self.reconnect_timeout = 1
 
     def load(self, thread):
         for path in os.listdir('sounds'):
@@ -89,19 +90,19 @@ class SoundManager:
     def get(self, type, state):
         """Get a sample from its sound name"""
 
-        if type == UpdateType.MVP: sound = 'MVP'
-        elif type == UpdateType.ROUND_WIN: sound = 'Round win'
-        elif type == UpdateType.ROUND_LOSE: sound = 'Round lose'
-        elif type == UpdateType.SUICIDE: sound = 'Suicide'
-        elif type == UpdateType.TEAMKILL: sound = 'Teamkill'
-        elif type == UpdateType.DEATH: sound = 'Death'
-        elif type == UpdateType.FLASH: sound = 'Flashed'
-        elif type == UpdateType.KNIFE: sound = 'Unusual kill'
-        elif type == UpdateType.HEADSHOT: sound = 'Headshot'
-        elif type == UpdateType.KILL: sound = state.round_kills + ' kills'
-        elif type == UpdateType.COLLATERAL: sound = 'Collateral'
-        elif type == UpdateType.ROUND_START: sound = 'Round start'
-        elif type == UpdateType.TIMEOUT: sound = 'Timeout'
+        if type == GameEvent.Type.MVP: sound = 'MVP'
+        elif type == GameEvent.Type.ROUND_WIN: sound = 'Round win'
+        elif type == GameEvent.Type.ROUND_LOSE: sound = 'Round lose'
+        elif type == GameEvent.Type.SUICIDE: sound = 'Suicide'
+        elif type == GameEvent.Type.TEAMKILL: sound = 'Teamkill'
+        elif type == GameEvent.Type.DEATH: sound = 'Death'
+        elif type == GameEvent.Type.FLASH: sound = 'Flashed'
+        elif type == GameEvent.Type.KNIFE: sound = 'Unusual kill'
+        elif type == GameEvent.Type.HEADSHOT: sound = 'Headshot'
+        elif type == GameEvent.Type.KILL: sound = state.round_kills + ' kills'
+        elif type == GameEvent.Type.COLLATERAL: sound = 'Collateral'
+        elif type == GameEvent.Type.ROUND_START: sound = 'Round start'
+        elif type == GameEvent.Type.TIMEOUT: sound = 'Timeout'
 
         for sample in self.collections:
             if sample.name.startswith('sounds/' + sound):
@@ -116,7 +117,7 @@ class SoundManager:
             sample.play(index)
 
     def handle(self, update_type, raw_packet):
-        if update_type == UpdateType.PLAY_SOUND:
+        if update_type == GameEvent.Type.PLAY_SOUND:
             packet = PlaySound()
             packet.ParseFromString(raw_packet)
             # TODO import bytes
@@ -130,29 +131,53 @@ class SoundManager:
 
     def listen(self):
         while True:
-            try:
-				# 255 bytes should be more than enough for the PacketInfo message
-				data = self.sock.recv(255)
-				if len(data) == 0:
-					break
-				
-				packet_info = PacketInfo()
-				packet_info.ParseFromString(data)
-				
-				if packet_info['length'] > 2 * 1024 * 1024:
-					# Don't allow files or packets over 2 Mb
-					break
+            with self.sock_lock:
+                if not self.connected:
+                    try:
+                        self.sock = socket.create_connection((SOUND_SERVER_IP, SOUND_SERVER_PORT))
+                        self.connected = True
+                        self.reconnect_timeout = 1
 
-				data = self.sock.recv(packet_info['length'])
-				if len(data) == 0:
-					break
-				
-				self.handle(packet_info['type'], data)
+                        # TODO send handshake
+                    except ConnectionRefusedError:
+                        self.connected = False
+
+                        sleep(self.reconnect_timeout)
+                        self.reconnect_timeout *= 2
+                        if self.reconnect_timeout > 60:
+                            self.reconnect_timeout = 60
+
+                        continue
+
+            try:
+                # 255 bytes should be more than enough for the PacketInfo message
+                with self.sock_lock:
+                    self.sock.settimeout(0.1)
+                    data = self.sock.recv(255)
+                    self.sock.settimeout(None)
+                if len(data) == 0:
+                    break
+                
+                packet_info = PacketInfo()
+                packet_info.ParseFromString(data)
+                
+                if packet_info['length'] > 2 * 1024 * 1024:
+                    # Don't allow files or packets over 2 Mb
+                    break
+
+                with self.sock_lock:
+                    data = self.sock.recv(packet_info['length'])
+                if len(data) == 0:
+                    break
+                
+                self.handle(packet_info['type'], data)
             except ConnectionResetError:
-				break
+                self.connected = False
+            except socket.timeout:
+                pass
             except socket.error as msg:
-				print("Error: " + msg)
-				break
+                print("Connection error: " + str(msg))
+                break
 
     def send(self, update_type, state):
         """Sends a sound to play for everybody"""
@@ -161,11 +186,12 @@ class SoundManager:
             hash = collection.get_random_hash()
             if hash != None:
                 print('%d: %s' % (hash, state.steamid))
-                update = GamestateUpdate()
+                update = GameEvent()
                 update['update'] = update_type
                 update['proposed_sound_hash'] = hash
                 update['kill_count'] = state.round_kills
-                self.sock.send(update.SerializeToString())
+                with self.sock_lock:
+                    self.sock.send(update.SerializeToString())
                 
 
 sounds = SoundManager()

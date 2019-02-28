@@ -1,13 +1,33 @@
 syntax = "proto3";
 
-// Sent to server
-message ChangeSteamID {
-	fixed64 new_id = 1;
-	bytes client_id = 2; // should be 64 bytes
+
+// Sent to both
+message PacketInfo {
+	enum Type {
+		GAME_EVENT = 0;
+		PLAY_SOUND = 1;
+		SOUND_REQUEST = 2;
+		SOUND_RESPONSE = 3;
+		CHANGE_STEAMID = 4;
+	}
+
+	Type type = 1;
+	int32 length = 2;
 }
 
-message GamestateUpdate {
-	enum UpdateType {
+message SoundRequest {
+	repeated bytes sound_hash = 1; // should be 64 bytes
+}
+
+message SoundResponse {
+	bytes data = 1;
+	bytes hash = 2; // should be 64 bytes
+}
+
+
+// Sent to server
+message GameEvent {
+	enum Type {
 		MVP = 0;
 		ROUND_WIN = 1;
 		ROUND_LOSE = 2;
@@ -23,13 +43,26 @@ message GamestateUpdate {
 		TIMEOUT = 12;
 	}
 
-	UpdateType update = 1;
+	Type update = 1;
 	bytes proposed_sound_hash = 2; // should be 64 bytes
 	int32 kill_count = 3;
 }
 
-// TODO ServerUpdate : map, matchid if possible
+message GameUpdate {
+	enum PlayerStatus {
+		ALIVE = 0;
+		DEAD = 1;
 
+		// Player connects/disconnects from an ingame server
+		CONNECTED = 2;
+		UNCONNECTED = 3;
+	}
+
+	PlayerStatus status = 1;
+	bytes map = 2;
+	fixed64 steamid = 3;
+	bytes client_id = 4; // should be 64 bytes
+}
 
 
 // Sent to client
@@ -38,26 +71,11 @@ message PlaySound {
 	bytes sound_hash = 2; // should be 64 bytes
 }
 
-
-// Sent to both
-message PacketInfo {
-	enum PacketType {
-		GAMESTATE_UPDATE = 0;
-		PLAY_SOUND = 1;
-		SOUND_REQUEST = 2;
-		SOUND_RESPONSE = 3;
-		CHANGE_STEAMID = 4;
+message AccountList {
+	message Account {
+		fixed64 steamid = 1;
+		bytes name = 2;
 	}
 
-	PacketType type = 1;
-	int32 length = 2;
-}
-
-message SoundRequest {
-	repeated bytes sound_hash = 1; // should be 64 bytes
-}
-
-message SoundResponse {
-	bytes data = 1;
-	bytes hash = 2; // should be 64 bytes
+	repeated Account account = 1;
 }

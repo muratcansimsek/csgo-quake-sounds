@@ -4,7 +4,7 @@ import signal
 import socket
 from threading import Lock, Thread
 
-from packets_pb2 import PacketInfo, PacketType, GamestateUpdate, ChangeSteamID
+from packets_pb2 import PacketInfo, GameEvent, ChangeSteamID
 from config import SOUND_SERVER_PORT
 
 CLIENT_TIMEOUT = 120
@@ -33,11 +33,11 @@ class Client:
 		pass
 	
 	def handle(self, packet_type, raw_packet):
-		if packet_type == PacketType.GAMESTATE_UPDATE:
-			packet = GamestateUpdate()
+		if packet_type == PacketInfo.Type.GAME_EVENT:
+			packet = GameEvent()
 			packet.ParseFromString(raw_packet)
 			self.update(packet)
-		elif packet_type == PacketType.ChangeSteamID:
+		elif packet_type == PacketInfo.Type.ChangeSteamID:
 			packet = ChangeSteamID()
 			packet.ParseFromString(raw_packet)
 			self.set_steamid(packet)
