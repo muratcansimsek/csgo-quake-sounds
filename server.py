@@ -110,6 +110,35 @@ class Server:
 
 
 if __name__ == "__main__":
+	from steam import SteamClient
+	from csgo import CSGOClient
+
+	import logging
+
+	logging.basicConfig(format='[%(asctime)s] %(levelname)s %(name)s: %(message)s', level=logging.DEBUG)
+
+	client = SteamClient()
+	cs = CSGOClient(client)
+
+	@client.on('logged_on')
+	def start_csgo():
+		print("Logged on. Launching CS:GO...")
+		cs.launch()
+	
+	@cs.on('csgo_welcome')
+	def cs_ready(evt):
+		print("Launched CS:GO. Scanning profiles :)")
+		print("server acc id : " + str(cs.account_id))
+		print("requesting profile")
+		cs.request_live_game_for_user(76561198198426523 & 0xFFFFFFFF)
+		print("waiting for ev")
+		response, = cs.wait_event('live_game_for_user')
+		print("response: " + str(response))
+	
+	client.cli_login()
+	print("logged in!")
+	client.run_forever()
+
 	server = Server()
 	signal.signal(signal.SIGTERM, server.shutdown)
 	server.serve()

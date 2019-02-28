@@ -44,6 +44,8 @@ Please note that your version of Python should be 3.6 or higher.
 
 * Optional: edit config.py
 
+* `pip install -r server_requirements.txt`
+
 * `python server.py`
 
-No dependencies required other than Python 3.6+.
+Python 3.6+ is required.

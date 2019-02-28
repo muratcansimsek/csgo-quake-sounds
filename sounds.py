@@ -52,6 +52,7 @@ class SampleCollection:
 class SoundManager:
     """Loads and plays sounds"""
     def __init__(self):
+        self.colections_lock = Lock()
         self.collections = {}
         self.round_globals = []
         self.playerid = None
@@ -64,8 +65,9 @@ class SoundManager:
         for path in os.listdir('sounds'):
             complete_path = 'sounds/' + path
             if not os.path.isfile(complete_path):
-                self.collections[path] = SampleCollection(complete_path)
-                self.collections[path].load(self.sound_list(complete_path), thread)
+                with self.colections_lock:
+                    self.collections[path] = SampleCollection(complete_path)
+                    self.collections[path].load(self.sound_list(complete_path), thread)
     
     def sound_list(self, sounds_dir):
         """Returns the list of sounds in a directory and its subdirectories"""
@@ -104,9 +106,10 @@ class SoundManager:
         elif type == GameEvent.Type.ROUND_START: sound = 'Round start'
         elif type == GameEvent.Type.TIMEOUT: sound = 'Timeout'
 
-        for sample in self.collections:
-            if sample.name.startswith('sounds/' + sound):
-                return sample
+        with self.colections_lock:
+            for sample in self.collections:
+                if sample.name.startswith('sounds/' + sound):
+                    return sample
         print('[!] Folder "' + sound + '" not found, ignoring.')
         return None
 
