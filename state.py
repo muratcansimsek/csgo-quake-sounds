@@ -182,9 +182,9 @@ class CSGOState:
             return
 
         if newstate.is_ingame:
+            # TODO send connected/disconnected
+            
             sounds.playerid = newstate.playerid
-            if self.old_state and newstate.current_round != self.old_state.current_round:
-                sounds.round_globals = []
 
             # Play sounds and update state
             newstate.compare(self.old_state)

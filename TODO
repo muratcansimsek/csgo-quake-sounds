@@ -1,7 +1,6 @@
-- Basic client
-- Sound sharing
-- Sharding by map and round (+/- 1)
+- Send ClientUpdate when needed
 - Saved config outside of config.py
+- Errors windows
 
 Bonus:
 - Encrypted connection

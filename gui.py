@@ -3,8 +3,8 @@ import threading
 import wx
 import wx.adv
 
+import client
 import config
-import threads
 from sounds import sounds
 
 class TaskbarIcon(wx.adv.TaskBarIcon):
@@ -38,9 +38,7 @@ class MainFrame(wx.Frame):
 
         # Start threads
         self.UpdateSounds(None)
-        sound_client_thread = threading.Thread(target=sounds.listen, daemon=True)
-        sound_client_thread.start()
-        threads.start()
+        self.client = client.Client()
 
         self.taskbarIcon = TaskbarIcon(self)
         self.Bind(wx.EVT_ICONIZE, self.OnMinimize)
@@ -104,7 +102,7 @@ class MainFrame(wx.Frame):
     
     def UpdateSounds(self, event):
         self.updateSoundsBtn.Disable()
-        SampleLoaderThread(self).start()
+        threading.Thread(target=self.client.reload_sounds, daemon=True).start()
 
     def SelectAccount(self, event):
         # TODO handle deselect
@@ -127,23 +125,3 @@ class MainFrame(wx.Frame):
         self.taskbarIcon.RemoveIcon()
         self.taskbarIcon.Destroy()
         self.Destroy()
-
-class SampleLoaderThread(threading.Thread):
-    def __init__(self, gui):
-        threading.Thread.__init__(self, daemon=True)
-        self.gui = gui
-
-    def update_status(self):
-        wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.nb_sounds, self.max_sounds))
-        self.nb_sounds = self.nb_sounds + 1
-    
-    def set_status(self, msg):
-        wx.CallAfter(self.gui.SetStatusText, msg)
-    
-    def run(self):
-        self.nb_sounds = 0
-        self.max_sounds = len(sounds.sound_list('sounds'))
-        self.update_status()
-        sounds.load(self)
-        wx.CallAfter(self.gui.updateSoundsBtn.Enable)
-        wx.CallAfter(self.gui.SetStatusText, 'Waiting for CS:GO...')

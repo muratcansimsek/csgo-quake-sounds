@@ -259,7 +259,7 @@ class Server:
 		self.cache = []
 
 		for file in os.listdir('cache'):
-            # Only add valid files
+			# Only add valid files
 			if file.startswith('.git') or not os.path.isfile(file):
 				continue
 			self.cache.append(file)
