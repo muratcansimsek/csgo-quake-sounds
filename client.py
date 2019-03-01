@@ -38,74 +38,101 @@ class PostHandler(BaseHTTPRequestHandler):
         return
 
 class Client:
-    def __init__(self, gui):
+    def __init__(self):
         self.sock_lock = Lock()
         self.connected = False
         self.reconnect_timeout = 1
-        self.gui = gui
         self.shard_code = b''
 
-        sounds.init(self)
+    def init(self, gui):
+        """Non-blocking init"""
+        self.gui = gui
         gamestate_server = HTTPServer(('127.0.0.1', 3000), PostHandler)
         Thread(target=gamestate_server.serve_forever, daemon=True).start()
         Thread(target=self.listen, daemon=True).start()
     
     def update_status(self):
-        # TODO show true status
-        wx.CallAfter(self.gui.SetStatusText, 'Waiting for CS:GO...')
+        if not self.connected:
+            wx.CallAfter(self.gui.SetStatusText, 'Connecting to sound sync server...')
+            return
+        with GAMESTATE.lock:
+            if GAMESTATE.old_state == None:
+                wx.CallAfter(self.gui.SetStatusText, 'Waiting for CS:GO...')
+            elif GAMESTATE.is_ingame:
+                wx.CallAfter(self.gui.SetStatusText, '%s - round %s - steamID %s' % (GAMESTATE.old_state.phase, GAMESTATE.old_state.current_round, GAMESTATE.old_state.steamid))
+            else:
+                wx.CallAfter(self.gui.SetStatusText, 'not in a game server')
+        
+    def file_callback(self, hash, file):
+        with sounds.cache_lock:
+            sounds.cache[hash] = file
+        wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.loaded_sounds, self.max_sounds))
+        self.loaded_sounds = self.loaded_sounds + 1
     
     def reload_sounds(self):
         """Reloads all sounds. Not thread safe, should only be called from GUI"""
-        loaded_sounds = 0
-        max_sounds = len(sounds.sound_list('sounds'))
+        self.loaded_sounds = 0
+        self.max_sounds = len(sounds.sound_list('sounds'))
 
-        def file_callback(self, hash, file):
-            global loaded_sounds
-
-            with self.cache_lock:
-                self.cache[hash] = file
-            wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (loaded_sounds, max_sounds))
-            loaded_sounds = loaded_sounds + 1
-
-        sounds.load(file_callback)
+        sounds.load(self.file_callback)
         wx.CallAfter(self.gui.updateSoundsBtn.Enable)
         self.update_status()
 
         # Send sound list to server
+        with self.sock_lock:
+            if not self.connected:
+                return
         packet = SoundRequest()
-        with self.cache_lock:
-            for hash in self.cache:
-                packet.sound_hash.add(hash)
+        with sounds.cache_lock:
+            for hash in sounds.cache:
+                packet.sound_hash.append(bytes.fromhex(hash))
         raw_packet = packet.SerializeToString()
         header = PacketInfo()
-        header.type = PacketInfo.Type.SOUND_LIST
+        header.type = PacketInfo.SOUNDS_LIST
         header.length = len(raw_packet)
         with self.sock_lock:
-            self.sock.send(header.SerializeToString())
-            self.sock.send(raw_packet)
+            print("Sending sounds list")
+            print(str(header))
+            self.sock.sendall(header.SerializeToString())
+            self.sock.sendall(raw_packet)
 
     def request_sound(self, hash):
         packet = SoundRequest()
-        packet.sound_hash.add(hash)
+        packet.sound_hash.append(hash)
         raw_packet = packet.SerializeToString()
         header = PacketInfo()
-        header.type = PacketInfo.Type.SOUND_REQUEST
+        header.type = PacketInfo.SOUND_REQUEST
         header.length = len(raw_packet)
 
         with self.sock_lock:
-            self.sock.send(header.SerializeToString())
-            self.sock.send(raw_packet)
+            print("Requesting sound")
+            print(str(header))
+            self.sock.sendall(header.SerializeToString())
+            self.sock.sendall(raw_packet)
 
     def handle(self, packet_type, raw_packet):
-        if packet_type == PacketInfo.Type.PLAY_SOUND:
+        if packet_type == PacketInfo.PLAY_SOUND:
             packet = PlaySound()
             packet.ParseFromString(raw_packet)
-            sounds.play(packet)
-        elif packet_type == PacketInfo.Type.SOUND_REQUEST:
-            packet = SoundRequest()
-            packet.ParseFromString(raw_packet)
-            # TODO send sound
-        elif packet_type == PacketInfo.type.SOUND_RESPONSE:
+            if not sounds.play(packet):
+                self.request_sound(packet.sound_hash)
+        elif packet_type == PacketInfo.SOUND_REQUEST:
+            req = SoundRequest()
+            req.ParseFromString(raw_packet)
+            
+            for hash in req.sound_hash:
+                with open('cache/' + hash.hex(), 'rb') as infile:
+                    packet = SoundResponse()
+                    packet.data = infile.read()
+                    packet.hash = hash
+                    raw_packet = packet.SerializeToString()
+                    header = PacketInfo()
+                    header.type = PacketInfo.SOUND_RESPONSE
+                    header.length = len(raw_packet)
+                    with self.sock_lock:
+                        self.sock.sendall(header.SerializeToString())
+                        self.sock.sendall(raw_packet)
+        elif packet_type == PacketInfo.SOUND_RESPONSE:
             packet = SoundResponse()
             packet.ParseFromString(raw_packet)
             sounds.save(packet)
@@ -123,16 +150,18 @@ class Client:
                     self.reconnect_timeout = 1
 
                     packet = ClientUpdate()
-                    packet.status = ClientUpdate.PlayerStatus.UNCONNECTED
-                    packet.map = ''
+                    packet.status = ClientUpdate.UNCONNECTED
+                    packet.map = b''
                     packet.steamid = 0
                     packet.shard_code = self.shard_code
                     raw_packet = packet.SerializeToString()
                     header = PacketInfo()
-                    header.type = PacketInfo.Type.CLIENT_UPDATE
+                    header.type = PacketInfo.CLIENT_UPDATE
                     header.length = len(raw_packet)
-                    self.sock.send(header.SerializeToString())
-                    self.sock.send(raw_packet)
+                    print("Sending client update")
+                    print(str(header))
+                    self.sock.sendall(header.SerializeToString())
+                    self.sock.sendall(raw_packet)
 
                 except ConnectionRefusedError:
                     self.connected = False
@@ -151,10 +180,9 @@ class Client:
                 continue
 
             try:
-                # 255 bytes should be more than enough for the PacketInfo message
                 with self.sock_lock:
                     self.sock.settimeout(0.1)
-                    data = self.sock.recv(255)
+                    data = self.sock.recv(7)
                     self.sock.settimeout(None)
                 if len(data) == 0:
                     break

@@ -1,4 +1,5 @@
 - Send ClientUpdate when needed
+- Smart sound upload/download
 - Saved config outside of config.py
 - Errors windows
 

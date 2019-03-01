@@ -9,8 +9,8 @@ from threading import Lock, Thread
 from packets_pb2 import PacketInfo, GameEvent, SoundRequest, SoundResponse, ClientUpdate, PlaySound
 from config import SOUND_SERVER_PORT
 
-rare_events = [ GameEvent.Type.MVP, GameEvent.Type.SUICIDE, GameEvent.Type.TEAMKILL, GameEvent.Type.KNIFE, GameEvent.Type.COLLATERAL ]
-shared_events = [ GameEvent.Type.ROUND_WIN, GameEvent.Type.ROUND_LOSE, GameEvent.Type.ROUND_START, GameEvent.Type.TIMEOUT ]
+rare_events = [ GameEvent.MVP, GameEvent.SUICIDE, GameEvent.TEAMKILL, GameEvent.KNIFE, GameEvent.COLLATERAL ]
+shared_events = [ GameEvent.ROUND_WIN, GameEvent.ROUND_LOSE, GameEvent.ROUND_START, GameEvent.TIMEOUT ]
 
 CLIENT_TIMEOUT = 120
 MAX_CLIENTS = 100
@@ -41,7 +41,7 @@ class Shard:
 		raw_packet = packet.SerializeToString()
 
 		header = PacketInfo()
-		header.type = PacketInfo.Type.PLAY_SOUND
+		header.type = PacketInfo.PLAY_SOUND
 		header.length = len(raw_packet)
 		raw_header = header.SerializeToString()
 
@@ -51,8 +51,8 @@ class Shard:
 			for client in self.clients:
 				if client.ingame:
 					with client.lock:
-						client.sock.send(raw_header)
-						client.sock.send(raw_packet)
+						client.sock.sendall(raw_header)
+						client.sock.sendall(raw_packet)
 
 					if client.round > self.round or round < self.round - 1:
 						self.round = client.round
@@ -90,22 +90,22 @@ class Client:
 				request_sound = True
 		if request_sound:
 			sound_request = SoundRequest()
-			sound_request.sound_hash.add(hash)
+			sound_request.sound_hash.append(hash)
 			raw_request = sound_request.SerializeToString()
 
 			header = PacketInfo()
-			header.type = PacketInfo.Type.SOUND_REQUEST
+			header.type = PacketInfo.SOUND_REQUEST
 			header.length = len(raw_request)
 
 			with self.lock:
-				print('Requesting %s from %d' % (small_hash(hash), self.steamid))
-				self.sock.send(header.SerializeToString())
-				self.sock.send(raw_request)
+				print('Requesting %s from %s' % (small_hash(hash), self.addr))
+				self.sock.sendall(header.SerializeToString())
+				self.sock.sendall(raw_request)
 
 	def get_event_class(self, packet):
 		if packet.update in rare_events: return 'rare'
 		if packet.update in shared_events: return 'shared'
-		if packet.update == GameEvent.Type.KILL and packet.kill_count > 3: return 'rare'
+		if packet.update == GameEvent.KILL and packet.kill_count > 3: return 'rare'
 		return 'normal'
 
 	def handle_event(self, packet):
@@ -127,7 +127,7 @@ class Client:
 			if not packet.sound_hash in self.server.cache:
 				return
 		
-		with os.open('cache/' + packet.sound_hash) as infile:
+		with open('cache/' + packet.sound_hash.hex(), 'rb') as infile:
 			data = infile.read()
 
 		res = SoundResponse()
@@ -136,13 +136,13 @@ class Client:
 		raw_res = res.SerializeToString()
 
 		header = PacketInfo()
-		header.type = PacketInfo.Type.SOUND_RESPONSE
+		header.type = PacketInfo.SOUND_RESPONSE
 		header.length = len(raw_res)
 
 		with self.lock:
 			print('Sending %s to %d' % (small_hash(packet.sound_hash), self.steamid))
-			self.sock.send(header.SerializeToString())
-			self.sock.send(raw_res)
+			self.sock.sendall(header.SerializeToString())
+			self.sock.sendall(raw_res)
 	
 	def save_sound(self, packet):
 		verif = hashlib.blake2b()
@@ -155,21 +155,26 @@ class Client:
 			if packet.hash in self.server.cache:
 				# Sound already saved
 				return
-		with os.open('cache/' + packet.hash) as outfile:
+		with open('cache/' + packet.hash.hex(), 'wb') as outfile:
 			outfile.write(packet.data)
 		with self.server.cache_lock:
 			self.server.cache.append(packet.hash)
 		with self.lock:
-			print('Saved %s from %d' % (small_hash(packet.hash), self.steamid))
+			print('Saved %s from %s' % (small_hash(packet.hash), self.addr))
 		
 	def update(self, packet):
 		with self.lock:
-			self.ingame = packet.status == ClientUpdate.PlayerStatus.CONNECTED
+			self.ingame = packet.status == ClientUpdate.CONNECTED
 			self.map = packet.map
 			self.steamid = packet.steamid
 
 			# Update shard
-			if self.shard.name != packet.shard_code:
+			if self.shard == None:
+				new_shard = self.server.get_shard(packet.shard_code)
+				with new_shard.lock:
+					new_shard.clients.append(self)
+					self.shard = new_shard
+			elif self.shard.name != packet.shard_code:
 				old_shard = self.server.get_shard(self.shard.name)
 				with old_shard.lock:
 					old_shard.clients.remove(self)
@@ -180,23 +185,23 @@ class Client:
 					self.shard = new_shard
 
 	def handle(self, packet_type, raw_packet):
-		if packet_type == PacketInfo.Type.GAME_EVENT:
+		if packet_type == PacketInfo.GAME_EVENT:
 			packet = GameEvent()
 			packet.ParseFromString(raw_packet)
 			self.handle_event(packet)
-		elif packet_type == PacketInfo.Type.SOUND_REQUEST:
+		elif packet_type == PacketInfo.SOUND_REQUEST:
 			packet = SoundRequest()
 			packet.ParseFromString(raw_packet)
 			self.send_sound(packet)
-		elif packet_type == PacketInfo.Type.SOUND_RESPONSE:
+		elif packet_type == PacketInfo.SOUND_RESPONSE:
 			packet = SoundResponse()
 			packet.ParseFromString(raw_packet)
 			self.save_sound(packet)
-		elif packet_type == PacketInfo.Type.CLIENT_UPDATE:
+		elif packet_type == PacketInfo.CLIENT_UPDATE:
 			packet = ClientUpdate()
 			packet.ParseFromString(raw_packet)
 			self.update(packet)
-		elif packet_type == PacketInfo.Type.SOUNDS_LIST:
+		elif packet_type == PacketInfo.SOUNDS_LIST:
 			packet = SoundRequest()
 			packet.ParseFromString(raw_packet)
 			for hash in packet.sound_hash:
@@ -209,14 +214,14 @@ class Client:
 
 		while self.server.running:
 			try:
-				# 255 bytes should be more than enough for the PacketInfo message
 				with self.lock:
-					data = self.sock.recv(255)
+					data = self.sock.recv(7)
 				if len(data) == 0:
 					break
 				
 				packet_info = PacketInfo()
 				packet_info.ParseFromString(data)
+				print(str(packet_info))
 				
 				if packet_info.length > 2 * 1024 * 1024:
 					# Don't allow files or packets over 2 Mb
@@ -260,7 +265,7 @@ class Server:
 
 		for file in os.listdir('cache'):
 			# Only add valid files
-			if file.startswith('.git') or not os.path.isfile(file):
+			if file.startswith('.git') or not os.path.isfile('cache/' + file):
 				continue
 			self.cache.append(file)
 

@@ -26,10 +26,13 @@ class SampleCollection:
             hash = hashlib.blake2b()
             with open(filename, 'rb') as infile:
                 hash.update(infile.read())
-            try:
                 digest = hash.hexdigest()
+                with open('cache/' + digest, 'wb') as outfile:
+                    infile.seek(0)
+                    outfile.write(infile.read())
+            try:
                 file = pyglet.media.load(filename, streaming=True if self.name in streaming_categories else False)
-                print(" + " + filename + ": " + digest)
+                print(' + Loaded %s (%s)' % (small_hash(hash.digest()), filename))
             except Exception as e:
                 print(" ! Failed to load \"" + filename + "\": " + str(e))
             else:
@@ -50,9 +53,6 @@ class SoundManager:
         self.cache_lock = Lock()
         self.cache = {}
         self.playerid = None
-
-    def init(self, client):
-        self.client = client
 
     def load(self, one_sound_loaded_callback):
         """Reloads all sounds from the sounds/ folder"""
@@ -84,19 +84,19 @@ class SoundManager:
 
     def get_random(self, type, state):
         """Get a sample from its sound name"""
-        if type == GameEvent.Type.MVP: sound = 'MVP'
-        elif type == GameEvent.Type.ROUND_WIN: sound = 'Round win'
-        elif type == GameEvent.Type.ROUND_LOSE: sound = 'Round lose'
-        elif type == GameEvent.Type.SUICIDE: sound = 'Suicide'
-        elif type == GameEvent.Type.TEAMKILL: sound = 'Teamkill'
-        elif type == GameEvent.Type.DEATH: sound = 'Death'
-        elif type == GameEvent.Type.FLASH: sound = 'Flashed'
-        elif type == GameEvent.Type.KNIFE: sound = 'Unusual kill'
-        elif type == GameEvent.Type.HEADSHOT: sound = 'Headshot'
-        elif type == GameEvent.Type.KILL: sound = state.round_kills + ' kills'
-        elif type == GameEvent.Type.COLLATERAL: sound = 'Collateral'
-        elif type == GameEvent.Type.ROUND_START: sound = 'Round start'
-        elif type == GameEvent.Type.TIMEOUT: sound = 'Timeout'
+        if type == GameEvent.MVP: sound = 'MVP'
+        elif type == GameEvent.ROUND_WIN: sound = 'Round win'
+        elif type == GameEvent.ROUND_LOSE: sound = 'Round lose'
+        elif type == GameEvent.SUICIDE: sound = 'Suicide'
+        elif type == GameEvent.TEAMKILL: sound = 'Teamkill'
+        elif type == GameEvent.DEATH: sound = 'Death'
+        elif type == GameEvent.FLASH: sound = 'Flashed'
+        elif type == GameEvent.KNIFE: sound = 'Unusual kill'
+        elif type == GameEvent.HEADSHOT: sound = 'Headshot'
+        elif type == GameEvent.KILL: sound = state.round_kills + ' kills'
+        elif type == GameEvent.COLLATERAL: sound = 'Collateral'
+        elif type == GameEvent.ROUND_START: sound = 'Round start'
+        elif type == GameEvent.TIMEOUT: sound = 'Timeout'
 
         for sample in self.collections:
             if sample.name.startswith('sounds/' + sound):
@@ -106,19 +106,22 @@ class SoundManager:
 
     def play(self, packet):
         if packet.steamid != self.playerid and packet.steamid != 0:
-            return
+            return True
         sound_missing = False
         with self.cache_lock:
             if packet.sound_hash in self.cache:
-                self.cache[packet.sound_hash].play()
+                hash = packet.sound_hash.hex()
+                self.cache[hash].play()
                 print('[+] Playing %s' % small_hash(packet.sound_hash))
             else:
                 print('[!] Sound %s missing, requesting from server' % small_hash(packet.sound_hash))
                 sound_missing = True
         if sound_missing:
             with self.cache_lock:
-                self.wanted_sounds[packet.sound_hash] = datetime.now()
-            self.client.request_sound(packet.sound_hash)
+                self.wanted_sounds[hash] = datetime.now()
+            return False
+        else:
+            return True
 
     def play_received(self, hash):
         """Try playing a sound if it was received quickly enough"""
@@ -131,7 +134,7 @@ class SoundManager:
             print('[+] Playing %s (%f ms late)' % (small_hash(hash), datetime.now() - wanted_time))
     
     def save(self, packet):
-        with os.open('cache/' + packet.hash) as outfile:
+        with open('cache/' + packet.hash, 'wb') as outfile:
             outfile.write(packet.data)
         try:
             file = pyglet.media.load('cache/' + packet.hash, streaming=True)

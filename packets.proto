@@ -15,7 +15,7 @@ message PacketInfo {
 	}
 
 	Type type = 1;
-	int32 length = 2;
+	fixed32 length = 2;
 }
 
 message SoundRequest {

@@ -37,8 +37,9 @@ class MainFrame(wx.Frame):
         self.SetStatusText("Loading sounds...")
 
         # Start threads
-        self.UpdateSounds(None)
         self.client = client.Client()
+        self.client.init(self)
+        self.UpdateSounds(None)
 
         self.taskbarIcon = TaskbarIcon(self)
         self.Bind(wx.EVT_ICONIZE, self.OnMinimize)
