@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\rpackets.proto\"\x9e\x01\n\nPacketInfo\x12\x1e\n\x04type\x18\x01 \x01(\x0e\x32\x10.PacketInfo.Type\x12\x0e\n\x06length\x18\x02 \x01(\x05\"`\n\x04Type\x12\x0e\n\nGAME_EVENT\x10\x00\x12\x0e\n\nPLAY_SOUND\x10\x01\x12\x11\n\rSOUND_REQUEST\x10\x02\x12\x12\n\x0eSOUND_RESPONSE\x10\x03\x12\x11\n\rCLIENT_UPDATE\x10\x04\"\"\n\x0cSoundRequest\x12\x12\n\nsound_hash\x18\x01 \x03(\x0c\"+\n\rSoundResponse\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x0c\n\x04hash\x18\x02 \x01(\x0c\"\x9f\x02\n\tGameEvent\x12\x1f\n\x06update\x18\x01 \x01(\x0e\x32\x0f.GameEvent.Type\x12\x1b\n\x13proposed_sound_hash\x18\x02 \x01(\x0c\x12\x12\n\nkill_count\x18\x03 \x01(\x05\x12\r\n\x05round\x18\x04 \x01(\x05\"\xb0\x01\n\x04Type\x12\x07\n\x03MVP\x10\x00\x12\r\n\tROUND_WIN\x10\x01\x12\x0e\n\nROUND_LOSE\x10\x02\x12\x0b\n\x07SUICIDE\x10\x03\x12\x0c\n\x08TEAMKILL\x10\x04\x12\t\n\x05\x44\x45\x41TH\x10\x05\x12\t\n\x05\x46LASH\x10\x06\x12\t\n\x05KNIFE\x10\x07\x12\x0c\n\x08HEADSHOT\x10\x08\x12\x08\n\x04KILL\x10\t\x12\x0e\n\nCOLLATERAL\x10\n\x12\x0f\n\x0bROUND_START\x10\x0b\x12\x0b\n\x07TIMEOUT\x10\x0c\"\x9c\x01\n\x0c\x43lientUpdate\x12*\n\x06status\x18\x01 \x01(\x0e\x32\x1a.ClientUpdate.PlayerStatus\x12\x0b\n\x03map\x18\x02 \x01(\x0c\x12\x0f\n\x07steamid\x18\x03 \x01(\x06\x12\x12\n\nshard_code\x18\x04 \x01(\x0c\".\n\x0cPlayerStatus\x12\r\n\tCONNECTED\x10\x00\x12\x0f\n\x0bUNCONNECTED\x10\x01\"0\n\tPlaySound\x12\x0f\n\x07steamid\x18\x01 \x01(\x06\x12\x12\n\nsound_hash\x18\x02 \x01(\x0c\x62\x06proto3')
+  serialized_pb=_b('\n\rpackets.proto\"\xaf\x01\n\nPacketInfo\x12\x1e\n\x04type\x18\x01 \x01(\x0e\x32\x10.PacketInfo.Type\x12\x0e\n\x06length\x18\x02 \x01(\x05\"q\n\x04Type\x12\x0e\n\nGAME_EVENT\x10\x00\x12\x0e\n\nPLAY_SOUND\x10\x01\x12\x11\n\rSOUND_REQUEST\x10\x02\x12\x12\n\x0eSOUND_RESPONSE\x10\x03\x12\x11\n\rCLIENT_UPDATE\x10\x04\x12\x0f\n\x0bSOUNDS_LIST\x10\x05\"\"\n\x0cSoundRequest\x12\x12\n\nsound_hash\x18\x01 \x03(\x0c\"+\n\rSoundResponse\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x0c\n\x04hash\x18\x02 \x01(\x0c\"\x9f\x02\n\tGameEvent\x12\x1f\n\x06update\x18\x01 \x01(\x0e\x32\x0f.GameEvent.Type\x12\x1b\n\x13proposed_sound_hash\x18\x02 \x01(\x0c\x12\x12\n\nkill_count\x18\x03 \x01(\x05\x12\r\n\x05round\x18\x04 \x01(\x05\"\xb0\x01\n\x04Type\x12\x07\n\x03MVP\x10\x00\x12\r\n\tROUND_WIN\x10\x01\x12\x0e\n\nROUND_LOSE\x10\x02\x12\x0b\n\x07SUICIDE\x10\x03\x12\x0c\n\x08TEAMKILL\x10\x04\x12\t\n\x05\x44\x45\x41TH\x10\x05\x12\t\n\x05\x46LASH\x10\x06\x12\t\n\x05KNIFE\x10\x07\x12\x0c\n\x08HEADSHOT\x10\x08\x12\x08\n\x04KILL\x10\t\x12\x0e\n\nCOLLATERAL\x10\n\x12\x0f\n\x0bROUND_START\x10\x0b\x12\x0b\n\x07TIMEOUT\x10\x0c\"\x9c\x01\n\x0c\x43lientUpdate\x12*\n\x06status\x18\x01 \x01(\x0e\x32\x1a.ClientUpdate.PlayerStatus\x12\x0b\n\x03map\x18\x02 \x01(\x0c\x12\x0f\n\x07steamid\x18\x03 \x01(\x06\x12\x12\n\nshard_code\x18\x04 \x01(\x0c\".\n\x0cPlayerStatus\x12\r\n\tCONNECTED\x10\x00\x12\x0f\n\x0bUNCONNECTED\x10\x01\"0\n\tPlaySound\x12\x0f\n\x07steamid\x18\x01 \x01(\x06\x12\x12\n\nsound_hash\x18\x02 \x01(\x0c\x62\x06proto3')
 )
 
 
@@ -50,11 +50,15 @@ _PACKETINFO_TYPE = _descriptor.EnumDescriptor(
       name='CLIENT_UPDATE', index=4, number=4,
       serialized_options=None,
       type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SOUNDS_LIST', index=5, number=5,
+      serialized_options=None,
+      type=None),
   ],
   containing_type=None,
   serialized_options=None,
   serialized_start=80,
-  serialized_end=176,
+  serialized_end=193,
 )
 _sym_db.RegisterEnumDescriptor(_PACKETINFO_TYPE)
 
@@ -119,8 +123,8 @@ _GAMEEVENT_TYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=371,
-  serialized_end=547,
+  serialized_start=388,
+  serialized_end=564,
 )
 _sym_db.RegisterEnumDescriptor(_GAMEEVENT_TYPE)
 
@@ -141,8 +145,8 @@ _CLIENTUPDATE_PLAYERSTATUS = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=660,
-  serialized_end=706,
+  serialized_start=677,
+  serialized_end=723,
 )
 _sym_db.RegisterEnumDescriptor(_CLIENTUPDATE_PLAYERSTATUS)
 
@@ -182,7 +186,7 @@ _PACKETINFO = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=18,
-  serialized_end=176,
+  serialized_end=193,
 )
 
 
@@ -212,8 +216,8 @@ _SOUNDREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=178,
-  serialized_end=212,
+  serialized_start=195,
+  serialized_end=229,
 )
 
 
@@ -250,8 +254,8 @@ _SOUNDRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=214,
-  serialized_end=257,
+  serialized_start=231,
+  serialized_end=274,
 )
 
 
@@ -303,8 +307,8 @@ _GAMEEVENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=260,
-  serialized_end=547,
+  serialized_start=277,
+  serialized_end=564,
 )
 
 
@@ -356,8 +360,8 @@ _CLIENTUPDATE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=550,
-  serialized_end=706,
+  serialized_start=567,
+  serialized_end=723,
 )
 
 
@@ -394,8 +398,8 @@ _PLAYSOUND = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=708,
-  serialized_end=756,
+  serialized_start=725,
+  serialized_end=773,
 )
 
 _PACKETINFO.fields_by_name['type'].enum_type = _PACKETINFO_TYPE

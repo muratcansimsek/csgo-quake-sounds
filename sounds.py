@@ -54,7 +54,6 @@ class SoundManager:
     def __init__(self):
         self.colections_lock = Lock()
         self.collections = {}
-        self.round_globals = []
         self.playerid = None
 
         self.sock_lock = Lock()

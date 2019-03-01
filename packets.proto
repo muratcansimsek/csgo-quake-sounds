@@ -9,6 +9,9 @@ message PacketInfo {
 		SOUND_REQUEST = 2;
 		SOUND_RESPONSE = 3;
 		CLIENT_UPDATE = 4;
+
+		// Client sends its local sound list, so server can request sounds
+		SOUNDS_LIST = 5;
 	}
 
 	Type type = 1;
@@ -16,12 +19,12 @@ message PacketInfo {
 }
 
 message SoundRequest {
-	repeated bytes sound_hash = 1; // should be 64 bytes
+	repeated bytes sound_hash = 1;
 }
 
 message SoundResponse {
 	bytes data = 1;
-	bytes hash = 2; // should be 64 bytes
+	bytes hash = 2;
 }
 
 
@@ -44,7 +47,7 @@ message GameEvent {
 	}
 
 	Type update = 1;
-	bytes proposed_sound_hash = 2; // should be 64 bytes
+	bytes proposed_sound_hash = 2;
 	int32 kill_count = 3;
 	int32 round = 4;
 }
@@ -66,5 +69,5 @@ message ClientUpdate {
 // Sent to client
 message PlaySound {
 	fixed64 steamid = 1;
-	bytes sound_hash = 2; // should be 64 bytes
+	bytes sound_hash = 2;
 }

@@ -100,7 +100,7 @@ class PlayerState:
 
         # Play timeout music
         if self.phase == 'freezetime' and self.play_timeout:
-            sounds.send(GaveEvent.Type.TIMEOUT, self)
+            sounds.send(GameEvent.Type.TIMEOUT, self)
             self.play_timeout = False
 
         # Reset state when switching players (used for MVPs)
@@ -110,12 +110,12 @@ class PlayerState:
 
         # Play round start, win, lose, MVP
         if self.is_local_player and self.mvps == old_state.mvps + 1:
-            sounds.send(GaveEvent.Type.MVP, self)
+            sounds.send(GameEvent.Type.MVP, self)
         elif self.phase != old_state.phase:
             if self.phase == 'over' and self.mvps == old_state.mvps:
-                sounds.send(GaveEvent.Type.ROUND_WIN if self.won_round else GaveEvent.Type.ROUND_LOSE, 0)
+                sounds.send(GameEvent.Type.ROUND_WIN if self.won_round else GameEvent.Type.ROUND_LOSE, 0)
             elif self.phase == 'live':
-                sounds.send(GaveEvent.Type.ROUND_START, self)
+                sounds.send(GameEvent.Type.ROUND_START, self)
 
         # Don't play player-triggered sounds below this ##########
         if not self.is_local_player:
@@ -125,46 +125,46 @@ class PlayerState:
         # Lost kills - either teamkilled or suicided
         if self.total_kills < old_state.total_kills:
             if self.total_deaths == old_state.total_deaths + 1:
-                sounds.send(GaveEvent.Type.SUICIDE, self)
+                sounds.send(GameEvent.Type.SUICIDE, self)
             elif self.total_deaths == old_state.total_deaths:
-                sounds.send(GaveEvent.Type.TEAMKILL, self)
+                sounds.send(GameEvent.Type.TEAMKILL, self)
         # Didn't suicide or teamkill -> check if player just died
         elif self.total_deaths == old_state.total_deaths + 1:
-            sounds.send(GaveEvent.Type.DEATH, self)
+            sounds.send(GameEvent.Type.DEATH, self)
 
         # Player got flashed
         if self.flash_opacity > 150 and self.flash_opacity > old_state.flash_opacity:
-            sounds.send(GaveEvent.Type.FLASH, self)
+            sounds.send(GameEvent.Type.FLASH, self)
 
         # Player killed someone
         if self.round_kills == old_state.round_kills + 1:
             # Kill with knife equipped
             if self.is_knife_active:
-                sounds.send(GaveEvent.Type.KNIFE, self)
+                sounds.send(GameEvent.Type.KNIFE, self)
             # Kill with weapon equipped
             else:
                 # Headshot
                 if self.round_headshots == old_state.round_headshots + 1:
                     # Headshot override : always play Headshot
                     if HEADSHOTS_OVERRIDE:
-                        sounds.send(GaveEvent.Type.HEADSHOT, self)
+                        sounds.send(GameEvent.Type.HEADSHOT, self)
                         return
                     # No headshot override : do not play over double kills, etc
                     if self.round_kills < 2 or self.round_kills > 5:
-                        sounds.send(GaveEvent.Type.HEADSHOT, self)
+                        sounds.send(GameEvent.Type.HEADSHOT, self)
 
                 # Killstreaks, headshotted or not
                 if self.round_kills == 2:
-                    sounds.send(GaveEvent.Type.KILL, self)
+                    sounds.send(GameEvent.Type.KILL, self)
                 elif self.round_kills == 3:
-                    sounds.send(GaveEvent.Type.KILL, self)
+                    sounds.send(GameEvent.Type.KILL, self)
                 elif self.round_kills == 4:
-                    sounds.send(GaveEvent.Type.KILL, self)
+                    sounds.send(GameEvent.Type.KILL, self)
                 elif self.round_kills == 5:
-                    sounds.send(GaveEvent.Type.KILL, self)
+                    sounds.send(GameEvent.Type.KILL, self)
         # Player killed multiple players
         elif self.round_kills > old_state.round_kills:
-            sounds.send(GaveEvent.Type.COLLATERAL, self)
+            sounds.send(GameEvent.Type.COLLATERAL, self)
 
 class CSGOState:
     """Follows the CSGO state via gamestate integration"""

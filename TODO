@@ -1,10 +1,7 @@
 - Basic client
-- Basic server
 - Sound sharing
 - Sharding by map and round (+/- 1)
-- DoS protection
 - Saved config outside of config.py
 
 Bonus:
 - Encrypted connection
-- DDoS protection
