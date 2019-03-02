@@ -86,7 +86,7 @@ class Client:
 		"""Request sound if we don't have it in cache"""
 		request_sound = False
 		with self.server.cache_lock:
-			if hash not in self.server.cache:
+			if hash.hex() not in self.server.cache:
 				request_sound = True
 		if request_sound:
 			sound_request = SoundRequest()
@@ -152,13 +152,15 @@ class Client:
 			return
 
 		with self.server.cache_lock:
-			if packet.hash in self.server.cache:
+			if packet.hash.hex() in self.server.cache:
 				# Sound already saved
+				with self.lock:
+					print('%s sent %s but we already have it. Ignoring.' % (str(self.addr), small_hash(packet.hash)))
 				return
 		with open('cache/' + packet.hash.hex(), 'wb') as outfile:
 			outfile.write(packet.data)
 		with self.server.cache_lock:
-			self.server.cache.append(packet.hash)
+			self.server.cache.append(packet.hash.hex())
 		with self.lock:
 			print('Saved %s from %s' % (small_hash(packet.hash), self.addr))
 		
@@ -204,6 +206,8 @@ class Client:
 		elif packet_type == PacketInfo.SOUNDS_LIST:
 			packet = SoundRequest()
 			packet.ParseFromString(raw_packet)
+			with self.lock:
+				print('Recieved sound list from %s.' % str(self.addr))
 			for hash in packet.sound_hash:
 				self.check_or_request_sound(hash)
 		else:
@@ -216,21 +220,21 @@ class Client:
 			try:
 				with self.lock:
 					data = self.sock.recv(7)
-				if len(data) == 0:
-					break
-				
-				packet_info = PacketInfo()
-				packet_info.ParseFromString(data)
-				print(str(packet_info))
-				
-				if packet_info.length > 2 * 1024 * 1024:
-					# Don't allow files or packets over 2 Mb
-					break
+					if len(data) == 0:
+						break
+					
+					packet_info = PacketInfo()
+					packet_info.ParseFromString(data)
+					print(str(packet_info))
+					
+					if packet_info.length > 2 * 1024 * 1024:
+						# Don't allow files or packets over 2 Mb
+						break
 
-				with self.lock:
-					data = self.sock.recv(packet_info.length)
-				if len(data) == 0:
-					break
+					with self.lock:
+						data = self.sock.recv(packet_info.length)
+					if len(data) == 0:
+						break
 				
 				self.handle(packet_info.type, data)
 			except ConnectionResetError:
@@ -267,7 +271,10 @@ class Server:
 			# Only add valid files
 			if file.startswith('.git') or not os.path.isfile('cache/' + file):
 				continue
-			self.cache.append(file)
+			with self.cache_lock:
+				self.cache.append(file)
+		with self.cache_lock:
+			print('%d sounds in cache.' % len(self.cache))
 
 	def get_shard(self, name):
 		with self.shards_lock:

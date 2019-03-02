@@ -6,7 +6,7 @@ import random
 import os
 from threading import Lock
 
-from packets_pb2 import GameEvent
+from packets_pb2 import GameEvent, PacketInfo
 
 streaming_categories = ['MVP', 'Round lose', 'Round start', 'Round win', 'Timeout']
 
@@ -53,15 +53,20 @@ class SoundManager:
         self.cache_lock = Lock()
         self.cache = {}
         self.playerid = None
+        self.client = None
+
+    def init(self, client):
+        self.client = client
 
     def load(self, one_sound_loaded_callback):
         """Reloads all sounds from the sounds/ folder"""
-        for path in os.listdir('sounds'):
-            complete_path = 'sounds/' + path
-            if not os.path.isfile(complete_path):
-                self.collections[path] = SampleCollection(complete_path)
-                self.collections[path].load(self.sound_list(complete_path), one_sound_loaded_callback)
-    
+        with self.cache_lock:
+            for path in os.listdir('sounds'):
+                complete_path = 'sounds/' + path
+                if not os.path.isfile(complete_path):
+                    self.collections[path] = SampleCollection(complete_path)
+                    self.collections[path].load(self.sound_list(complete_path), one_sound_loaded_callback)
+        
     def sound_list(self, sounds_dir):
         """Returns the list of sounds in a directory and its subdirectories"""
         list = []
@@ -147,17 +152,19 @@ class SoundManager:
 
     def send(self, update_type, state):
         """Sends a sound to play for everybody"""
+        if self.client == None:
+            return
+        
         collection = self.get(update_type, state)
         if collection:
             hash = collection.get_random_hash()
             if hash != None:
                 print('%d: %s' % (hash, state.steamid))
-                update = GameEvent()
-                update['update'] = update_type
-                update['proposed_sound_hash'] = hash
-                update['kill_count'] = state.round_kills
-                with self.sock_lock:
-                    self.sock.send(update.SerializeToString())
+                packet = GameEvent()
+                packet.update = update_type
+                packet.proposed_sound_hash = hash
+                packet.kill_count = state.round_kills
+                self.client.send(PacketInfo.GAME_EVENT, packet)
                 
 
 sounds = SoundManager()

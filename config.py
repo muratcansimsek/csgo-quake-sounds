@@ -7,7 +7,7 @@ HEADSHOTS_OVERRIDE = False
 # to modify it yourself and follow the build instructions in the README.
 # You could then give them an installer with your own sounds bundled in.
 SOUND_SERVER_IP = '127.0.0.1'
-SOUND_SERVER_PORT = 4000
+SOUND_SERVER_PORT = 4004
 
 DOWNLOAD_WHEN_ALIVE = False
 UPLOAD_WHEN_ALIVE = False

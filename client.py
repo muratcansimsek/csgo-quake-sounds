@@ -1,71 +1,69 @@
-import json
 import socket
 import wx
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import HTTPServer
 from time import sleep
 from threading import Thread, Lock
 
 from config import SOUND_SERVER_IP, SOUND_SERVER_PORT
 from packets_pb2 import PacketInfo, GameEvent, PlaySound, SoundRequest, SoundResponse, ClientUpdate
 from sounds import sounds
-from state import CSGOState
-
-GAMESTATE = CSGOState()
-
-# Thread-safe printing
-print_lock = Lock()
-unsafe_print = print
-def print(*a, **b):
-	with print_lock:
-		unsafe_print(*a, **b)
-
-class PostHandler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        content_len = int(self.headers['Content-Length'])
-        body = self.rfile.read(content_len)
-        self.send_response(200)
-        self.end_headers()
-
-        if not self.recieved_post:
-            print('\r\n[+] CSGO Gamestate Integration is working\r\n')
-            self.recieved_post = True
-
-        GAMESTATE.update(json.loads(body))
-        return
-    
-    def log_message(self, format, *args):
-        # Do not spam the console with POSTs
-        return
+from state import state, PostHandler
 
 class Client:
     def __init__(self):
         self.sock_lock = Lock()
         self.connected = False
         self.reconnect_timeout = 1
-        self.shard_code = b''
+        self.shard_code = ''
 
     def init(self, gui):
         """Non-blocking init"""
         self.gui = gui
+        sounds.init(self)
+        state.init(self)
         gamestate_server = HTTPServer(('127.0.0.1', 3000), PostHandler)
         Thread(target=gamestate_server.serve_forever, daemon=True).start()
         Thread(target=self.listen, daemon=True).start()
+    
+    def send(self, type, packet):
+        raw_packet = packet.SerializeToString()
+        header = PacketInfo()
+        header.type = type
+        header.length = len(raw_packet)
+        
+        with self.sock_lock:
+            self.sock.sendall(header.SerializeToString())
+            self.sock.sendall(raw_packet)
+
+    def client_update(self):
+        packet = ClientUpdate()
+        with state.lock:
+            if state.old_state == None or not state.old_state.is_ingame:
+                packet.status = ClientUpdate.UNCONNECTED
+                packet.map = b''
+                packet.steamid = 0
+            else:
+                packet.status = ClientUpdate.CONNECTED
+                packet.map = b'' # TODO
+                packet.steamid = state.old_state.steamid
+
+        packet.shard_code = self.shard_code.encode('utf-8')
+        self.send(PacketInfo.CLIENT_UPDATE, packet)
     
     def update_status(self):
         if not self.connected:
             wx.CallAfter(self.gui.SetStatusText, 'Connecting to sound sync server...')
             return
-        with GAMESTATE.lock:
-            if GAMESTATE.old_state == None:
+        with state.lock:
+            if state.old_state == None:
                 wx.CallAfter(self.gui.SetStatusText, 'Waiting for CS:GO...')
-            elif GAMESTATE.is_ingame:
-                wx.CallAfter(self.gui.SetStatusText, '%s - round %s - steamID %s' % (GAMESTATE.old_state.phase, GAMESTATE.old_state.current_round, GAMESTATE.old_state.steamid))
+            elif state.old_state.is_ingame:
+                wx.CallAfter(self.gui.SetStatusText, '%s - round %s - steamID %s' % (state.old_state.phase, state.old_state.current_round, state.old_state.steamid))
             else:
                 wx.CallAfter(self.gui.SetStatusText, 'not in a game server')
         
     def file_callback(self, hash, file):
-        with sounds.cache_lock:
-            sounds.cache[hash] = file
+        sounds.cache[hash] = file
         wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.loaded_sounds, self.max_sounds))
         self.loaded_sounds = self.loaded_sounds + 1
     
@@ -148,21 +146,6 @@ class Client:
                     self.sock = socket.create_connection((SOUND_SERVER_IP, SOUND_SERVER_PORT))
                     self.connected = True
                     self.reconnect_timeout = 1
-
-                    packet = ClientUpdate()
-                    packet.status = ClientUpdate.UNCONNECTED
-                    packet.map = b''
-                    packet.steamid = 0
-                    packet.shard_code = self.shard_code
-                    raw_packet = packet.SerializeToString()
-                    header = PacketInfo()
-                    header.type = PacketInfo.CLIENT_UPDATE
-                    header.length = len(raw_packet)
-                    print("Sending client update")
-                    print(str(header))
-                    self.sock.sendall(header.SerializeToString())
-                    self.sock.sendall(raw_packet)
-
                 except ConnectionRefusedError:
                     self.connected = False
 
@@ -172,6 +155,9 @@ class Client:
                         self.reconnect_timeout = 60
 
                     return False
+            else:
+                return True
+        self.client_update()
         return True
 
     def listen(self):
@@ -184,19 +170,18 @@ class Client:
                     self.sock.settimeout(0.1)
                     data = self.sock.recv(7)
                     self.sock.settimeout(None)
-                if len(data) == 0:
-                    break
-                
-                packet_info = PacketInfo()
-                packet_info.ParseFromString(data)
-                if packet_info.length > 2 * 1024 * 1024:
-                    # Don't allow files or packets over 2 Mb
-                    break
+                    if len(data) == 0:
+                        break
+                    
+                    packet_info = PacketInfo()
+                    packet_info.ParseFromString(data)
+                    if packet_info.length > 2 * 1024 * 1024:
+                        # Don't allow files or packets over 2 Mb
+                        break
 
-                with self.sock_lock:
                     data = self.sock.recv(packet_info.length)
-                if len(data) == 0:
-                    break
+                    if len(data) == 0:
+                        break
                 
                 self.handle(packet_info.type, data)
             except ConnectionResetError:

@@ -1,5 +1,7 @@
 """Related to CSGO Gamestate"""
+import json
 from threading import Lock
+from http.server import BaseHTTPRequestHandler
 
 from sounds import sounds
 from config import HEADSHOTS_OVERRIDE
@@ -173,9 +175,14 @@ class CSGOState:
     def __init__(self):
         self.lock = Lock()
         self.old_state = None
+        self.client = None
+    
+    def init(self, client):
+        self.client = client
 
     def update(self, json):
         """Update the entire game state"""
+        should_update_client = False
         with self.lock:
             newstate = PlayerState(json)
 
@@ -184,15 +191,34 @@ class CSGOState:
                 return
 
             if newstate.is_ingame:
-                # TODO send connected/disconnected
-
+                if self.old_state == None or not self.old_state.is_ingame:
+                    should_update_client = True
                 sounds.playerid = newstate.playerid
 
                 # Play sounds and update state
                 newstate.compare(self.old_state)
                 self.old_state = newstate
             else:
+                if self.old_state.is_ingame:
+                    should_update_client = True
+
                 # Reset state in main menu
                 self.old_state = None
                 sounds.playerid = None
+        if should_update_client and self.client != None:
+            self.client.client_update()
 
+class PostHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_len = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_len)
+        self.send_response(200)
+        self.end_headers()
+        state.update(json.loads(body))
+        return
+    
+    def log_message(self, format, *args):
+        # Do not spam the console with POSTs
+        return
+
+state = CSGOState()

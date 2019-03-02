@@ -49,18 +49,16 @@ class MainFrame(wx.Frame):
     
     def make_friends_zone(self):
         shardCodeBtn = wx.Button(self.panel, label="Set code")
-        shardCodeIpt = wx.TextCtrl(self.panel, value=config.SHARD_CODE, size=(164, shardCodeBtn.GetMinSize().GetHeight()))
+        self.Bind(wx.EVT_BUTTON, self.UpdateShardCode, shardCodeBtn)
+        self.shardCodeIpt = wx.TextCtrl(self.panel, value=config.SHARD_CODE, size=(164, shardCodeBtn.GetMinSize().GetHeight()))
         shardCodeExplanationTxt = wx.StaticText(self.panel, label="To make sure you are in the same server as your\nfriends, use the same friends code.")
 
         friendsZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Friends code")
         friendsZone.Add(shardCodeExplanationTxt, border=5, flag=wx.LEFT | wx.DOWN)
         friendsInputZone = wx.BoxSizer(wx.HORIZONTAL)
-        friendsInputZone.Add(shardCodeIpt, border=5, flag=wx.ALIGN_CENTER_VERTICAL | wx.ALL)
+        friendsInputZone.Add(self.shardCodeIpt, border=5, flag=wx.ALIGN_CENTER_VERTICAL | wx.ALL)
         friendsInputZone.Add(shardCodeBtn, border=5, flag=wx.ALIGN_CENTER_VERTICAL | wx.ALL)
         friendsZone.Add(friendsInputZone)
-
-        # TODO
-        shardCodeBtn.Disable()
 
         return friendsZone
     
@@ -101,22 +99,13 @@ class MainFrame(wx.Frame):
         # TODO linux
         subprocess.Popen('explorer "sounds"')
     
+    def UpdateShardCode(self, event):
+        self.client.shard_code = self.shardCodeIpt.GetValue()
+        threading.Thread(target=self.client.client_update, daemon=True).start()
+    
     def UpdateSounds(self, event):
         self.updateSoundsBtn.Disable()
         threading.Thread(target=self.client.reload_sounds, daemon=True).start()
-
-    def SelectAccount(self, event):
-        # TODO handle deselect
-        self.removeAccountBtn.Enable()
-    
-    def AddAccount(self, event):
-        # TODO open auth page
-        pass
-
-    def RemoveAccount(self, event):
-        # TODO remove acc
-        # TODO disable button if no accounts left
-        pass
 
     def OnMinimize(self, event):
         if self.IsIconized():
