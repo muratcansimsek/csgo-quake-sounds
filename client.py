@@ -1,6 +1,7 @@
 import socket
 import wx
 from http.server import HTTPServer
+from queue import Empty, Queue
 from time import sleep
 from threading import Thread, Lock
 
@@ -15,6 +16,9 @@ class Client:
         self.connected = False
         self.reconnect_timeout = 1
         self.shard_code = ''
+
+        self.download_queue = Queue()
+        self.upload_queue = Queue()
 
     def init(self, gui):
         """Non-blocking init"""
@@ -32,8 +36,23 @@ class Client:
         header.length = len(raw_packet)
         
         with self.sock_lock:
+            print('Sending packet of type %d' % type)
             self.sock.sendall(header.SerializeToString())
             self.sock.sendall(raw_packet)
+        
+        round_change_types = [ GameEvent.ROUND_WIN, GameEvent.ROUND_LOSE, GameEvent.SUICIDE, GameEvent.DEATH, GameEvent.ROUND_START ]
+        if type == PacketInfo.GAME_EVENT:
+            if packet.update in round_change_types:
+                try:
+                    item = self.download_queue.get(block=False)
+                    self.request_sound(item)
+                except Empty:
+                    pass
+                try:
+                    item = self.upload_queue.get(block=False)
+                    self.respond_sound(item)
+                except Empty:
+                    pass
 
     def client_update(self):
         packet = ClientUpdate()
@@ -45,7 +64,7 @@ class Client:
             else:
                 packet.status = ClientUpdate.CONNECTED
                 packet.map = b'' # TODO
-                packet.steamid = state.old_state.steamid
+                packet.steamid = int(state.old_state.steamid)
 
         packet.shard_code = self.shard_code.encode('utf-8')
         self.send(PacketInfo.CLIENT_UPDATE, packet)
@@ -84,29 +103,43 @@ class Client:
         with sounds.cache_lock:
             for hash in sounds.cache:
                 packet.sound_hash.append(bytes.fromhex(hash))
-        raw_packet = packet.SerializeToString()
-        header = PacketInfo()
-        header.type = PacketInfo.SOUNDS_LIST
-        header.length = len(raw_packet)
-        with self.sock_lock:
-            print("Sending sounds list")
-            print(str(header))
-            self.sock.sendall(header.SerializeToString())
-            self.sock.sendall(raw_packet)
+        self.send(PacketInfo.SOUNDS_LIST, packet)
 
     def request_sound(self, hash):
+        if state.is_alive() and not self.gui.downloadWhenAliveChk.Value:
+            self.download_queue.put(packet.sound_hash)
+            return
+
         packet = SoundRequest()
         packet.sound_hash.append(hash)
-        raw_packet = packet.SerializeToString()
-        header = PacketInfo()
-        header.type = PacketInfo.SOUND_REQUEST
-        header.length = len(raw_packet)
+        self.send(PacketInfo.SOUND_REQUEST, packet)
 
-        with self.sock_lock:
-            print("Requesting sound")
-            print(str(header))
-            self.sock.sendall(header.SerializeToString())
-            self.sock.sendall(raw_packet)
+        if not state.is_alive() or self.gui.downloadWhenAliveChk.Value:
+            # Still not playing : request more sounds!
+            try:
+                item = self.download_queue.get(block=False)
+                self.request_sound(item)
+            except Empty:
+                pass
+    
+    def respond_sound(self, hash):
+        if state.is_alive() and not self.gui.uploadWhenAliveChk.Value:
+            self.upload_queue.put(hash)
+            return
+
+        with open('cache/' + hash, 'rb') as infile:
+            packet = SoundResponse()
+            packet.data = infile.read()
+            packet.hash = hash
+            self.send(PacketInfo.SOUND_RESPONSE, packet)
+        
+        if not state.is_alive() or self.gui.uploadWhenAliveChk.Value:
+            # Still not playing : send more sounds!
+            try:
+                item = self.upload_queue.get(block=False)
+                self.request_sound(item)
+            except Empty:
+                pass
 
     def handle(self, packet_type, raw_packet):
         if packet_type == PacketInfo.PLAY_SOUND:
@@ -117,19 +150,10 @@ class Client:
         elif packet_type == PacketInfo.SOUND_REQUEST:
             req = SoundRequest()
             req.ParseFromString(raw_packet)
-            
+            print(str(req))
+
             for hash in req.sound_hash:
-                with open('cache/' + hash.hex(), 'rb') as infile:
-                    packet = SoundResponse()
-                    packet.data = infile.read()
-                    packet.hash = hash
-                    raw_packet = packet.SerializeToString()
-                    header = PacketInfo()
-                    header.type = PacketInfo.SOUND_RESPONSE
-                    header.length = len(raw_packet)
-                    with self.sock_lock:
-                        self.sock.sendall(header.SerializeToString())
-                        self.sock.sendall(raw_packet)
+                self.respond_sound(hash)
         elif packet_type == PacketInfo.SOUND_RESPONSE:
             packet = SoundResponse()
             packet.ParseFromString(raw_packet)

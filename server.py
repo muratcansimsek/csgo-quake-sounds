@@ -9,6 +9,9 @@ from threading import Lock, Thread
 from packets_pb2 import PacketInfo, GameEvent, SoundRequest, SoundResponse, ClientUpdate, PlaySound
 from config import SOUND_SERVER_PORT
 
+# temp
+from time import sleep
+
 rare_events = [ GameEvent.MVP, GameEvent.SUICIDE, GameEvent.TEAMKILL, GameEvent.KNIFE, GameEvent.COLLATERAL ]
 shared_events = [ GameEvent.ROUND_WIN, GameEvent.ROUND_LOSE, GameEvent.ROUND_START, GameEvent.TIMEOUT ]
 
@@ -37,7 +40,7 @@ class Shard:
 	def play(self, steamid, hash):
 		packet = PlaySound()
 		packet.steamid = steamid
-		packet.hash = hash
+		packet.sound_hash = hash
 		raw_packet = packet.SerializeToString()
 
 		header = PacketInfo()
@@ -45,7 +48,7 @@ class Shard:
 		header.length = len(raw_packet)
 		raw_header = header.SerializeToString()
 
-		print('[%s] %d : %s (%d clients)' % (self.name, steamid, small_hash(hash), len(self.clients)))
+		print('playing %s for steamid %d in shard %s (%d clients)' % (small_hash(hash), steamid, self.name, len(self.clients)))
 
 		with self.lock:
 			for client in self.clients:
@@ -54,7 +57,7 @@ class Shard:
 						client.sock.sendall(raw_header)
 						client.sock.sendall(raw_packet)
 
-					if client.round > self.round or round < self.round - 1:
+					if client.round > self.round or client.round < self.round - 1:
 						self.round = client.round
 						self.round_events = []
 	
@@ -65,7 +68,7 @@ class Shard:
 				self.round_events.append(event)
 				should_play = True
 		if should_play:
-			self.play(b'', hash)
+			self.play(0, hash)
 
 
 class Client:
@@ -82,25 +85,23 @@ class Client:
 		
 		self.sock.settimeout(CLIENT_TIMEOUT)
 	
-	def check_or_request_sound(self, hash):
+	def check_or_request_sounds(self, hashes):
 		"""Request sound if we don't have it in cache"""
-		request_sound = False
+		sound_request = SoundRequest()
 		with self.server.cache_lock:
-			if hash.hex() not in self.server.cache:
-				request_sound = True
-		if request_sound:
-			sound_request = SoundRequest()
-			sound_request.sound_hash.append(hash)
-			raw_request = sound_request.SerializeToString()
+			for hash in hashes:
+				if hash.hex() not in self.server.cache:
+					sound_request.sound_hash.append(hash)
+		raw_request = sound_request.SerializeToString()
 
-			header = PacketInfo()
-			header.type = PacketInfo.SOUND_REQUEST
-			header.length = len(raw_request)
+		header = PacketInfo()
+		header.type = PacketInfo.SOUND_REQUEST
+		header.length = len(raw_request)
 
-			with self.lock:
-				print('Requesting %s from %s' % (small_hash(hash), self.addr))
-				self.sock.sendall(header.SerializeToString())
-				self.sock.sendall(raw_request)
+		with self.lock:
+			print('Requesting %d/%d sounds from %s' % (len(sound_request.sound_hash), len(hashes), self.addr))
+			self.sock.sendall(header.SerializeToString())
+			self.sock.sendall(raw_request)
 
 	def get_event_class(self, packet):
 		if packet.update in rare_events: return 'rare'
@@ -115,12 +116,12 @@ class Client:
 				return
 
 		event_class = self.get_event_class(packet)
-		self.check_or_request_sound(packet.proposed_sound_hash)
+		self.check_or_request_sounds([packet.proposed_sound_hash])
 
 		if event_class == 'shared':
 			self.shard.play_shared(packet.update, packet.proposed_sound_hash)
 		else:
-			self.shard.play(self.steamid if event_class == 'normal' else b'', packet.proposed_sound_hash)
+			self.shard.play(self.steamid if event_class == 'normal' else 0, packet.proposed_sound_hash)
 	
 	def send_sound(self, packet):
 		with self.server.cache_lock:
@@ -177,6 +178,7 @@ class Client:
 					new_shard.clients.append(self)
 					self.shard = new_shard
 			elif self.shard.name != packet.shard_code:
+				print('%s (steamid %d) is now in shard %s' % (str(self.addr), self.steamid, packet.shard_code))
 				old_shard = self.server.get_shard(self.shard.name)
 				with old_shard.lock:
 					old_shard.clients.remove(self)
@@ -208,8 +210,7 @@ class Client:
 			packet.ParseFromString(raw_packet)
 			with self.lock:
 				print('Recieved sound list from %s.' % str(self.addr))
-			for hash in packet.sound_hash:
-				self.check_or_request_sound(hash)
+			self.check_or_request_sounds(packet.sound_hash)
 		else:
 			print(str(self.addr) + ": Unhandled packet type!")
 	
@@ -225,14 +226,13 @@ class Client:
 					
 					packet_info = PacketInfo()
 					packet_info.ParseFromString(data)
-					print(str(packet_info))
+					print('Recieved packet of type %d' % packet_info.type)
 					
 					if packet_info.length > 2 * 1024 * 1024:
 						# Don't allow files or packets over 2 Mb
 						break
 
-					with self.lock:
-						data = self.sock.recv(packet_info.length)
+					data = self.sock.recv(packet_info.length)
 					if len(data) == 0:
 						break
 				
@@ -242,6 +242,8 @@ class Client:
 			except socket.error as msg:
 				print("Error: " + msg)
 				break
+			
+			sleep(1)
 
 		if self.shard != None:
 			with self.shard.lock:

@@ -116,7 +116,7 @@ class PlayerState:
             sounds.send(GameEvent.MVP, self)
         elif self.phase != old_state.phase:
             if self.phase == 'over' and self.mvps == old_state.mvps:
-                sounds.send(GameEvent.ROUND_WIN if self.won_round else GameEvent.ROUND_LOSE, 0)
+                sounds.send(GameEvent.ROUND_WIN if self.won_round else GameEvent.ROUND_LOSE, self)
             elif self.phase == 'live':
                 sounds.send(GameEvent.ROUND_START, self)
 
@@ -149,7 +149,7 @@ class PlayerState:
                 # Headshot
                 if self.round_headshots == old_state.round_headshots + 1:
                     # Headshot override : always play Headshot
-                    if HEADSHOTS_OVERRIDE:
+                    if self.client.gui.preferHeadshotsChk.Value:
                         sounds.send(GameEvent.HEADSHOT, self)
                         return
                     # No headshot override : do not play over double kills, etc
@@ -179,6 +179,16 @@ class CSGOState:
     
     def init(self, client):
         self.client = client
+    
+    def is_alive(self):
+        with self.lock:
+            if self.old_state == None or not self.old_state.is_ingame:
+                return False
+            if self.old_state.phase != 'live':
+                return False
+            if self.old_state.steamid != self.old_state.playerid:
+                return False
+        return True
 
     def update(self, json):
         """Update the entire game state"""
@@ -190,9 +200,10 @@ class CSGOState:
             if not newstate.valid:
                 return
 
+            if self.old_state == None or self.old_state.steamid != newstate.steamid or self.old_state.is_ingame != newstate.is_ingame:
+                should_update_client = True
+
             if newstate.is_ingame:
-                if self.old_state == None or not self.old_state.is_ingame:
-                    should_update_client = True
                 sounds.playerid = newstate.playerid
 
                 # Play sounds and update state

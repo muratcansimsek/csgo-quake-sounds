@@ -98,16 +98,12 @@ class SoundManager:
         elif type == GameEvent.FLASH: sound = 'Flashed'
         elif type == GameEvent.KNIFE: sound = 'Unusual kill'
         elif type == GameEvent.HEADSHOT: sound = 'Headshot'
-        elif type == GameEvent.KILL: sound = state.round_kills + ' kills'
+        elif type == GameEvent.KILL: sound = '%d kills' % state.round_kills
         elif type == GameEvent.COLLATERAL: sound = 'Collateral'
         elif type == GameEvent.ROUND_START: sound = 'Round start'
         elif type == GameEvent.TIMEOUT: sound = 'Timeout'
-
-        for sample in self.collections:
-            if sample.name.startswith('sounds/' + sound):
-                return sample.get_random_hash()
-        print('[!] Folder "' + sound + '" not found, ignoring.')
-        return None
+        
+        return self.collections[sound].get_random_hash()
 
     def play(self, packet):
         if packet.steamid != self.playerid and packet.steamid != 0:
@@ -131,6 +127,8 @@ class SoundManager:
     def play_received(self, hash):
         """Try playing a sound if it was received quickly enough"""
         with self.cache_lock:
+            if hash not in self.wanted_sounds:
+                return
             wanted_time = self.wanted_sounds[hash]
             self.wanted_sounds.remove(hash)
             if wanted_time + 1000 > datetime.now():
@@ -155,16 +153,15 @@ class SoundManager:
         if self.client == None:
             return
         
-        collection = self.get(update_type, state)
-        if collection:
-            hash = collection.get_random_hash()
-            if hash != None:
-                print('%d: %s' % (hash, state.steamid))
-                packet = GameEvent()
-                packet.update = update_type
-                packet.proposed_sound_hash = hash
-                packet.kill_count = state.round_kills
-                self.client.send(PacketInfo.GAME_EVENT, packet)
+        hash = self.get_random(update_type, state)
+        if hash != None:
+            hash = hash.encode('utf-8')
+            print('%s: %s' % (small_hash(hash), state.steamid))
+            packet = GameEvent()
+            packet.update = update_type
+            packet.proposed_sound_hash = hash
+            packet.kill_count = state.round_kills
+            self.client.send(PacketInfo.GAME_EVENT, packet)
                 
 
 sounds = SoundManager()

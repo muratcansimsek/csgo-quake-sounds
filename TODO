@@ -1,7 +1,6 @@
-- Send ClientUpdate when needed
-- Smart sound upload/download
 - Saved config outside of config.py
 - Errors windows
+- Check for possible threading issues
 
 Bonus:
 - Encrypted connection

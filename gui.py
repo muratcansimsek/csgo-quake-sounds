@@ -63,13 +63,13 @@ class MainFrame(wx.Frame):
         return friendsZone
     
     def make_settings_zone(self):
-        preferHeadshotsChk = wx.CheckBox(self.panel, label="Prefer headshot sounds over killstreak sounds")
-        preferHeadshotsChk.SetValue(config.HEADSHOTS_OVERRIDE)
+        self.preferHeadshotsChk = wx.CheckBox(self.panel, label="Prefer headshot sounds over killstreak sounds")
+        self.preferHeadshotsChk.SetValue(config.HEADSHOTS_OVERRIDE)
         whenAliveTxt = wx.StaticText(self.panel, label="When alive:")
-        downloadWhenAliveChk = wx.CheckBox(self.panel, label="Download custom sounds")
-        downloadWhenAliveChk.SetValue(config.DOWNLOAD_WHEN_ALIVE)
-        uploadWhenAliveChk = wx.CheckBox(self.panel, label="Upload custom sounds")
-        uploadWhenAliveChk.SetValue(config.UPLOAD_WHEN_ALIVE)
+        self.downloadWhenAliveChk = wx.CheckBox(self.panel, label="Download custom sounds")
+        self.downloadWhenAliveChk.SetValue(config.DOWNLOAD_WHEN_ALIVE)
+        self.uploadWhenAliveChk = wx.CheckBox(self.panel, label="Upload custom sounds")
+        self.uploadWhenAliveChk.SetValue(config.UPLOAD_WHEN_ALIVE)
         whenAliveWarningTxt = wx.StaticText(self.panel, label="(can impact gameplay on slow connections)")
         openSoundDirBtn = wx.Button(self.panel, label="Open sounds directory")
         self.Bind(wx.EVT_BUTTON, self.OpenSoundsDir, openSoundDirBtn)
@@ -81,17 +81,12 @@ class MainFrame(wx.Frame):
         soundBtns.Add(self.updateSoundsBtn)
 
         settingsBox = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Settings")
-        settingsBox.Add(preferHeadshotsChk, border=5, flag=wx.ALL)
+        settingsBox.Add(self.preferHeadshotsChk, border=5, flag=wx.ALL)
         settingsBox.Add(whenAliveTxt, border=5, flag=wx.ALL)
-        settingsBox.Add(downloadWhenAliveChk, border=15, flag=wx.LEFT)
-        settingsBox.Add(uploadWhenAliveChk, border=15, flag=wx.LEFT)
+        settingsBox.Add(self.downloadWhenAliveChk, border=15, flag=wx.LEFT)
+        settingsBox.Add(self.uploadWhenAliveChk, border=15, flag=wx.LEFT)
         settingsBox.Add(whenAliveWarningTxt, border=5, flag=wx.ALL)
         settingsBox.Add(soundBtns, border=5, flag=wx.ALIGN_CENTER | wx.UP | wx.DOWN)
-
-        # TODO
-        preferHeadshotsChk.Disable()
-        downloadWhenAliveChk.Disable()
-        uploadWhenAliveChk.Disable()
 
         return settingsBox
 
