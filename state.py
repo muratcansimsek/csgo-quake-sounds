@@ -7,6 +7,8 @@ from sounds import sounds
 from config import HEADSHOTS_OVERRIDE
 from packets_pb2 import GameEvent
 
+prefer_headshots = HEADSHOTS_OVERRIDE
+
 class PlayerState:
     def __init__(self, json):
         self.valid = False
@@ -30,8 +32,10 @@ class PlayerState:
         # NOTE : this is modified in compare()
         self.play_timeout = False
 
-        # Don't try to get ingame state
-        if not self.is_ingame:
+        if self.is_ingame:
+            sounds.playerid = self.playerid
+        else:
+            sounds.playerid = None
             return
 
         try:
@@ -81,7 +85,10 @@ class PlayerState:
 
     def compare(self, old_state):
         # Init state without playing sounds
-        if not old_state or not old_state.is_ingame:
+        if not old_state or not old_state.valid:
+            return
+        
+        if not self.is_ingame or not self.valid:
             return
 
         # Ignore warmup
@@ -149,7 +156,7 @@ class PlayerState:
                 # Headshot
                 if self.round_headshots == old_state.round_headshots + 1:
                     # Headshot override : always play Headshot
-                    if self.client.gui.preferHeadshotsChk.Value:
+                    if prefer_headshots:
                         sounds.send(GameEvent.HEADSHOT, self)
                         return
                     # No headshot override : do not play over double kills, etc
@@ -195,29 +202,21 @@ class CSGOState:
         should_update_client = False
         with self.lock:
             newstate = PlayerState(json)
-
-            # Ignore invalid states
-            if not newstate.valid:
-                return
+            
+            # Update headshot preference
+            global prefer_headshots
+            if self.client != None:
+                prefer_headshots = self.client.gui.preferHeadshotsChk.Value
 
             if self.old_state == None or self.old_state.steamid != newstate.steamid or self.old_state.is_ingame != newstate.is_ingame:
                 should_update_client = True
 
-            if newstate.is_ingame:
-                sounds.playerid = newstate.playerid
-
-                # Play sounds and update state
-                newstate.compare(self.old_state)
-                self.old_state = newstate
-            else:
-                if self.old_state.is_ingame:
-                    should_update_client = True
-
-                # Reset state in main menu
-                self.old_state = None
-                sounds.playerid = None
-        if should_update_client and self.client != None:
-            self.client.client_update()
+            newstate.compare(self.old_state)
+            self.old_state = newstate
+        if self.client != None:
+            self.client.update_status()
+            if should_update_client:
+                self.client.client_update()
 
 class PostHandler(BaseHTTPRequestHandler):
     def do_POST(self):

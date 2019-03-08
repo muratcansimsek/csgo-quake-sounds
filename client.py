@@ -36,7 +36,7 @@ class Client:
         header.length = len(raw_packet)
         
         with self.sock_lock:
-            print('Sending packet of type %d' % type)
+            print('Sending %s packet' % PacketInfo.Type.Name(type))
             self.sock.sendall(header.SerializeToString())
             self.sock.sendall(raw_packet)
         
@@ -79,7 +79,7 @@ class Client:
             elif state.old_state.is_ingame:
                 wx.CallAfter(self.gui.SetStatusText, '%s - round %s - steamID %s' % (state.old_state.phase, state.old_state.current_round, state.old_state.steamid))
             else:
-                wx.CallAfter(self.gui.SetStatusText, 'not in a game server')
+                wx.CallAfter(self.gui.SetStatusText, 'Ready.')
         
     def file_callback(self, hash, file):
         sounds.cache[hash] = file
@@ -102,7 +102,7 @@ class Client:
         packet = SoundRequest()
         with sounds.cache_lock:
             for hash in sounds.cache:
-                packet.sound_hash.append(bytes.fromhex(hash))
+                packet.sound_hash.append(hash)
         self.send(PacketInfo.SOUNDS_LIST, packet)
 
     def request_sound(self, hash):
@@ -127,7 +127,7 @@ class Client:
             self.upload_queue.put(hash)
             return
 
-        with open('cache/' + hash, 'rb') as infile:
+        with open('cache/' + hash.hex(), 'rb') as infile:
             packet = SoundResponse()
             packet.data = infile.read()
             packet.hash = hash
@@ -142,6 +142,8 @@ class Client:
                 pass
 
     def handle(self, packet_type, raw_packet):
+        print('Received %s packet' % PacketInfo.Type.Name(packet_type))
+
         if packet_type == PacketInfo.PLAY_SOUND:
             packet = PlaySound()
             packet.ParseFromString(raw_packet)
@@ -150,7 +152,6 @@ class Client:
         elif packet_type == PacketInfo.SOUND_REQUEST:
             req = SoundRequest()
             req.ParseFromString(raw_packet)
-            print(str(req))
 
             for hash in req.sound_hash:
                 self.respond_sound(hash)
@@ -195,17 +196,23 @@ class Client:
                     data = self.sock.recv(7)
                     self.sock.settimeout(None)
                     if len(data) == 0:
-                        break
+                        print('Invalid header size, reconnecting')
+                        self.connected = False
+                        continue
                     
                     packet_info = PacketInfo()
                     packet_info.ParseFromString(data)
                     if packet_info.length > 2 * 1024 * 1024:
                         # Don't allow files or packets over 2 Mb
-                        break
+                        print('Invalid payload size, reconnecting')
+                        self.connected = False
+                        continue
 
                     data = self.sock.recv(packet_info.length)
                     if len(data) == 0:
-                        break
+                        print('Unknown connection error, reconnecting')
+                        self.connected = False
+                        continue
                 
                 self.handle(packet_info.type, data)
             except ConnectionResetError:
@@ -214,4 +221,5 @@ class Client:
                 pass
             except socket.error as msg:
                 print("Connection error: " + str(msg))
-                break
+                self.connected = False
+                continue
