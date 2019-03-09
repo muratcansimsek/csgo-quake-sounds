@@ -44,8 +44,6 @@ Please note that your version of Python should be 3.6 or higher.
 
 * Optional: edit config.py
 
-* `pip install -r server_requirements.txt`
+* `pip3 install protobuf`
 
-* `python server.py`
-
-Python 3.6+ is required.
+* `python3 server.py`

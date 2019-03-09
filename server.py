@@ -4,6 +4,7 @@ import hashlib
 import os
 import signal
 import socket
+import sys
 from threading import Lock, Thread
 
 from packets_pb2 import PacketInfo, GameEvent, SoundRequest, SoundResponse, ClientUpdate, PlaySound
@@ -297,6 +298,11 @@ class Server:
 
 
 if __name__ == "__main__":
-	server = Server()
-	signal.signal(signal.SIGTERM, server.shutdown)
-	server.serve()
+	# Python 3.6 is required because we use hashlib's blake2b implementation
+	# ...which did not exist before 3.6.
+	if sys.version_info[0] < 3 or sys.version_info[1] < 6:
+		print('Python 3.6+ is required, but you are running Python %d.%d.' % (sys.version_info[0], sys.version_info[1]))
+	else:
+		server = Server()
+		signal.signal(signal.SIGTERM, server.shutdown)
+		server.serve()
