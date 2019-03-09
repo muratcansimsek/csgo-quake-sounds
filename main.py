@@ -29,7 +29,7 @@ def get_csgo_path(steamapps_folder):
 	return steamapps_folder + "\\common\\" + data["AppState"]["installdir"]
 
 
-if __name__ == "__main__":
+def main():
 	# Ensure gamestate integration cfg is in csgo's cfg directory
 	# TODO in case of different install path, scan libraryfolders.vdf directories
 	# TODO linux
@@ -39,3 +39,6 @@ if __name__ == "__main__":
 	app = wx.App()
 	frame = gui.MainFrame(None, title="CSGO Custom Sounds", size=wx.Size(320, 360), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
 	app.MainLoop()
+
+if __name__ == "__main__":
+	main()

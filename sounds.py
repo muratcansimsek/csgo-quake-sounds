@@ -107,7 +107,7 @@ class SoundManager:
         return self.collections[sound].get_random_hash()
 
     def play(self, packet):
-        if packet.steamid != self.playerid and packet.steamid != 0:
+        if str(packet.steamid) != self.playerid and packet.steamid != 0:
             return True
         sound_missing = False
         with self.cache_lock:

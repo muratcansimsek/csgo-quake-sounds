@@ -1,8 +1,5 @@
-- Installer
 - Saved config outside of config.py
 - Errors windows
-- Check for possible threading issues
-- Keepalive or reconnect after timeout
 
 Bonus:
 - Encrypted connection

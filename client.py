@@ -174,6 +174,10 @@ class Client:
 			if not self.connected:
 				try:
 					self.sock = socket.create_connection((SOUND_SERVER_IP, SOUND_SERVER_PORT))
+
+					# Windows only keepalive - TODO linux/osx
+					self.sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, 10000, 3000))
+
 					self.connected = True
 					self.reconnect_timeout = 1
 				except ConnectionRefusedError:

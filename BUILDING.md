@@ -8,5 +8,7 @@ pynsist doesn't allow a lot of customization so follow these instructions :
 
 * Add [AVbin](https://github.com/AVbin/AVbin/downloads) as a dependency
 
+* Change icon & patch python icon
+
 * Right click `installer.nsi`, click "Compile NSIS Script"
 

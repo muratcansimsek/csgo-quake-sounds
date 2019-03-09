@@ -13,7 +13,7 @@ from config import SOUND_SERVER_PORT
 rare_events = [ GameEvent.MVP, GameEvent.SUICIDE, GameEvent.TEAMKILL, GameEvent.KNIFE, GameEvent.COLLATERAL ]
 shared_events = [ GameEvent.ROUND_WIN, GameEvent.ROUND_LOSE, GameEvent.ROUND_START, GameEvent.TIMEOUT ]
 
-CLIENT_TIMEOUT = 120
+CLIENT_TIMEOUT = 20
 MAX_CLIENTS = 100
 
 # Thread-safe printing
@@ -63,6 +63,10 @@ class Shard:
 	def play_shared(self, event, hash):
 		should_play = False
 		with self.lock:
+			if self.name == b'':
+				# Don't play sounds in default shard :
+				# The players that didn't set a shard yet would hear random sounds
+				return
 			if event not in self.round_events:
 				self.round_events.append(event)
 				should_play = True
