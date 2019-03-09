@@ -33,7 +33,7 @@ class Shard:
 		self.lock = Lock()
 		self.round = 0
 		self.round_events = []
-	
+
 	def play(self, steamid, hash):
 		packet = PlaySound()
 		packet.steamid = steamid
@@ -208,7 +208,7 @@ class Client:
 			self.check_or_request_sounds(packet.sound_hash)
 		else:
 			print(str(self.addr) + ": Unhandled packet type!")
-	
+
 	def listen(self):
 		print(str(self.addr) + " joined")
 
@@ -218,19 +218,21 @@ class Client:
 					data = self.sock.recv(7)
 					if len(data) == 0:
 						break
-					
+
 					packet_info = PacketInfo()
 					packet_info.ParseFromString(data)
 					print('%s Received %s packet' % (str(self.addr), PacketInfo.Type.Name(packet_info.type)))
-					
+
 					if packet_info.length > 2 * 1024 * 1024:
 						# Don't allow files or packets over 2 Mb
 						break
 
-					data = self.sock.recv(packet_info.length)
-					if len(data) == 0:
-						break
-				
+					data = b''
+					received = 0
+					while received < packet_info.length:
+						chunk = self.sock.recv(packet_info.length - received)
+						data += chunk
+						received += len(chunk)
 				self.handle(packet_info.type, data)
 			except ConnectionResetError:
 				break
@@ -257,7 +259,7 @@ class Server:
 
 	def shutdown(self):
 		self.running = False
-	
+
 	def init_sound_cache(self):
 		self.cache_lock = Lock()
 		self.cache = []
@@ -278,7 +280,7 @@ class Server:
 			else:
 				self.shards[name] = Shard(name)
 				return self.shards[name]
-				
+
 
 	def serve(self):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

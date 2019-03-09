@@ -39,7 +39,7 @@ class Client:
             print('Sending %s packet' % PacketInfo.Type.Name(type))
             self.sock.sendall(header.SerializeToString())
             self.sock.sendall(raw_packet)
-        
+
         round_change_types = [ GameEvent.ROUND_WIN, GameEvent.ROUND_LOSE, GameEvent.SUICIDE, GameEvent.DEATH, GameEvent.ROUND_START ]
         if type == PacketInfo.GAME_EVENT:
             if packet.update in round_change_types:
@@ -68,7 +68,7 @@ class Client:
 
         packet.shard_code = self.shard_code.encode('utf-8')
         self.send(PacketInfo.CLIENT_UPDATE, packet)
-    
+
     def update_status(self):
         if not self.connected:
             wx.CallAfter(self.gui.SetStatusText, 'Connecting to sound sync server...')
@@ -208,12 +208,12 @@ class Client:
                         self.connected = False
                         continue
 
-                    data = self.sock.recv(packet_info.length)
-                    if len(data) == 0:
-                        print('Unknown connection error, reconnecting')
-                        self.connected = False
-                        continue
-                
+                    data = b''
+                    received = 0
+                    while received < packet_info.length:
+                        chunk = self.sock.recv(packet_info.length - received)
+                        data += chunk
+                        received += len(chunk)
                 self.handle(packet_info.type, data)
             except ConnectionResetError:
                 self.connected = False
