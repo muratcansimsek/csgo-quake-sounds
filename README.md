@@ -24,26 +24,12 @@ If you play with friends, sounds will be shared when spectating, or on certain r
 
 This allows everyone to use their own custom sounds, without hearing different sounds.
 
-### Running (client)
+### Running
 
-If you don't want to use the installer, do the following :
+Most of the time, you would want to use the [installer](https://github.com/kiwec/csgo-quake-sounds/releases/latest).
 
-* Install [AVbin](https://github.com/AVbin/AVbin/downloads)
+However, if you want to try the latest version or host your own server, follow the instructions in [RUNNING.md](https://github.com/kiwec/csgo-quake-sounds/blob/master/RUNNING.md).
 
-* `git clone https://github.com/kiwec/csgo-quake-sounds.git && cd csgo-quake-sounds`
+### Building
 
-* `pip install -r requirements.txt`
-
-Then, run it :
-
-* `python main.py`
-
-Please note that your version of Python should be 3.6 or higher.
-
-### Running (server)
-
-* Optional: edit config.py
-
-* `pip3 install protobuf`
-
-* `python3 server.py`
+If you want to build your own installer, follow the instructions in [BUILDING.md](https://github.com/kiwec/csgo-quake-sounds/blob/master/BUILDING.md).
