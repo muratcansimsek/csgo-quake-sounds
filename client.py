@@ -9,15 +9,13 @@ from config import SOUND_SERVER_IP, SOUND_SERVER_PORT
 from packets_pb2 import PacketInfo, GameEvent, PlaySound, SoundRequest, SoundResponse, ClientUpdate
 from sounds import sounds
 from state import state, PostHandler
-
-def small_hash(hash):
-	hex = hash.hex()
-	return '%s-%s' % (hex[0:4], hex[-4:])
+from util import print, small_hash
 
 class Client:
 	def __init__(self):
 		self.sock_lock = Lock()
 		self.connected = False
+		self.packet_sent = True
 		self.reconnect_timeout = 1
 		self.shard_code = ''
 
@@ -32,6 +30,7 @@ class Client:
 		gamestate_server = HTTPServer(('127.0.0.1', 3000), PostHandler)
 		Thread(target=gamestate_server.serve_forever, daemon=True).start()
 		Thread(target=self.listen, daemon=True).start()
+		Thread(target=self.keepalive, daemon=True).start()
 	
 	def send(self, type, packet):
 		raw_packet = packet.SerializeToString()
@@ -40,9 +39,12 @@ class Client:
 		header.length = len(raw_packet)
 		
 		with self.sock_lock:
+			if not self.connected:
+				return
 			print('Sending %s packet' % PacketInfo.Type.Name(type))
 			self.sock.sendall(header.SerializeToString())
 			self.sock.sendall(raw_packet)
+			self.packet_sent = True
 
 		round_change_types = [ GameEvent.ROUND_WIN, GameEvent.ROUND_LOSE, GameEvent.SUICIDE, GameEvent.DEATH, GameEvent.ROUND_START ]
 		if type == PacketInfo.GAME_EVENT:
@@ -193,6 +195,22 @@ class Client:
 				return True
 		self.client_update()
 		return True
+
+	def keepalive(self):
+		while True:
+			# Send a packet every 10 seconds
+			should_update = True
+			with self.sock_lock:
+				if self.packet_sent:
+					should_update = False
+
+			if should_update:
+				self.client_update()
+
+			with self.sock_lock:
+				self.packet_sent = False
+
+			sleep(10)
 
 	def listen(self):
 		while True:

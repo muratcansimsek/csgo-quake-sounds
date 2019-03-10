@@ -14,6 +14,7 @@ setup(  name = "ccs",
             "excludes": ["tkinter"],
             "include_files": ["cache", "sounds", "gamestate_integration_ccs.cfg", "icon.ico"],
             "bin_includes": ["avbin64.dll"],
-            # "include_msvcr": True,
+            "optimize": 2,
+            "include_msvcr": True,
         }},
         executables = [Executable("main.py", base=base)])

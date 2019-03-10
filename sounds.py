@@ -6,13 +6,8 @@ import os
 from datetime import datetime
 from threading import Lock
 
-from packets_pb2 import GameEvent, PacketInfo
-
-streaming_categories = ['MVP', 'Round lose', 'Round start', 'Round win', 'Timeout']
-
-def small_hash(hash):
-    hex = hash.hex()
-    return '%s-%s' % (hex[0:4], hex[-4:])
+from packets_pb2 import GameEvent, PacketInfo, PlaySound
+from util import print, get_event_class, small_hash
 
 class SampleCollection:
     """Represents a sample collection (e.g. Double kill, Headshot, etc)"""
@@ -31,7 +26,8 @@ class SampleCollection:
                     infile.seek(0)
                     outfile.write(infile.read())
             try:
-                file = pyglet.media.load(filename, streaming=True if self.name in streaming_categories else False)
+                should_stream = self.name in ['MVP', 'Round lose', 'Round start', 'Round win', 'Timeout']
+                file = pyglet.media.load(filename, streaming=should_stream)
                 print(' + Loaded %s (%s)' % (small_hash(digest), filename))
             except Exception as e:
                 print(" ! Failed to load \"" + filename + "\": " + str(e))
@@ -55,6 +51,7 @@ class SoundManager:
         self.cache = {}
         self.playerid = None
         self.client = None
+        self.sound_time = 0
 
     def init(self, client):
         self.client = client
@@ -109,16 +106,29 @@ class SoundManager:
     def play(self, packet):
         if str(packet.steamid) != self.playerid and packet.steamid != 0:
             return True
-        sound_missing = False
+        
         with self.cache_lock:
+            # debug
+            print('Latency: %ss' % str(datetime.now() - self.sound_time))
+
+            # Sound is already loaded
             if packet.sound_hash in self.cache:
                 print('[+] Playing %s' % small_hash(packet.sound_hash))
                 self.cache[packet.sound_hash].play()
                 return True
             else:
-                print('[!] Sound %s missing, requesting from server' % small_hash(packet.sound_hash))
-                self.wanted_sounds[packet.sound_hash] = datetime.now()
-                return False
+                filename = 'cache/' + packet.sound_hash.hex()
+                if os.path.isfile(filename):
+                    # Sound is downloaded but not loaded
+                    print('[+] Loading and playing %s' % small_hash(packet.sound_hash))
+                    self.cache[packet.sound_hash] = pyglet.media.load(filename, streaming=True)
+                    self.cache[packet.sound_hash].play()
+                    return True
+                else:
+                    # Sound is not downloaded
+                    print('[!] Sound %s missing, requesting from server' % small_hash(packet.sound_hash))
+                    self.wanted_sounds[packet.sound_hash] = datetime.now()
+                    return False
 
     def play_received(self, hash):
         """Try playing a sound if it was received quickly enough"""
@@ -151,10 +161,19 @@ class SoundManager:
         
         hash = self.get_random(update_type, state)
         if hash != None:
+            self.sound_time = datetime.now()
             packet = GameEvent()
             packet.update = update_type
             packet.proposed_sound_hash = hash
             packet.kill_count = state.round_kills
+
+            # Non-shared event : play without waiting for server
+            if get_event_class(packet) != 'shared':
+                playpacket = PlaySound()
+                playpacket.steamid = 0
+                playpacket.sound_hash = hash
+                self.play(playpacket)
+
             self.client.send(PacketInfo.GAME_EVENT, packet)
                 
 

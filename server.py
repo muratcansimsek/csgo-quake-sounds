@@ -1,5 +1,4 @@
 """Sound server used to sync sounds between players"""
-import datetime
 import hashlib
 import os
 import signal
@@ -7,25 +6,12 @@ import socket
 import sys
 from threading import Lock, Thread
 
+from util import print, get_event_class, small_hash
 from packets_pb2 import PacketInfo, GameEvent, SoundRequest, SoundResponse, ClientUpdate, PlaySound
 from config import SOUND_SERVER_PORT
 
-rare_events = [ GameEvent.MVP, GameEvent.SUICIDE, GameEvent.TEAMKILL, GameEvent.KNIFE, GameEvent.COLLATERAL ]
-shared_events = [ GameEvent.ROUND_WIN, GameEvent.ROUND_LOSE, GameEvent.ROUND_START, GameEvent.TIMEOUT ]
-
 CLIENT_TIMEOUT = 20
 MAX_CLIENTS = 100
-
-# Thread-safe printing
-print_lock = Lock()
-unsafe_print = print
-def print(*a, **b):
-	with print_lock:
-		unsafe_print(*a, **b)
-
-def small_hash(hash):
-	hex = hash.hex()
-	return '%s-%s' % (hex[0:4], hex[-4:])
 
 class Shard:
 	def __init__(self, name):
@@ -51,8 +37,8 @@ class Shard:
 		with self.lock:
 			for client in self.clients:
 				with client.lock:
-					if client.ingame:
-						print('%s Should play sound %s if steamid %d' % (str(client.addr), small_hash(hash), steamid))
+					if client.ingame and client.steamid != steamid:
+						print('%s Should play sound %s if spectating %d' % (str(client.addr), small_hash(hash), steamid))
 						client.sock.sendall(raw_header)
 						client.sock.sendall(raw_packet)
 
@@ -112,19 +98,13 @@ class Client:
 			print('%s Requesting %d/%d sounds' % (str(self.addr), len(sound_request.sound_hash), len(hashes)))
 		self.send(PacketInfo.SOUND_REQUEST, sound_request)
 
-	def get_event_class(self, packet):
-		if packet.update in rare_events: return 'rare'
-		if packet.update in shared_events: return 'shared'
-		if packet.update == GameEvent.KILL and packet.kill_count > 3: return 'rare'
-		return 'normal'
-
 	def handle_event(self, packet):
 		with self.lock:
 			self.round = packet.round
 			if self.shard == None:
 				return
 
-		event_class = self.get_event_class(packet)
+		event_class = get_event_class(packet)
 		self.check_or_request_sounds([packet.proposed_sound_hash])
 
 		if event_class == 'shared':
