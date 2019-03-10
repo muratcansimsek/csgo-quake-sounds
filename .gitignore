@@ -1,6 +1,10 @@
 __pycache__
 venv
 .vscode
+
 build/
+dist/
+main.spec
+
 cache/*
 !cache/.gitkeep

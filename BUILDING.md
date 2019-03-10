@@ -1,14 +1,3 @@
-### Building an installer
+### Building
 
-pynsist doesn't allow a lot of customization so follow these instructions :
-
-* Run `pynsist installer.cfg --no-makensis`
-
-* Edit `build/nsis/installer.nsi`, replace `SetOutPath "%HOMEDRIVE%\%HOMEPATH%"` with `SetOutPath "$INSTDIR"`
-
-* Add [AVbin](https://github.com/AVbin/AVbin/downloads) as a dependency
-
-* Change icon & patch python icon
-
-* Right click `installer.nsi`, click "Compile NSIS Script"
-
+* Run `build.bat`
