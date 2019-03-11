@@ -6,9 +6,9 @@ import socket
 import sys
 from threading import Lock, Thread
 
+import config
 from util import print, get_event_class, small_hash
 from packets_pb2 import PacketInfo, GameEvent, SoundRequest, SoundResponse, ClientUpdate, PlaySound
-from config import SOUND_SERVER_PORT
 
 CLIENT_TIMEOUT = 20
 MAX_CLIENTS = 100
@@ -270,7 +270,9 @@ class Server:
 	def serve(self):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		self.sock.bind(("0.0.0.0", SOUND_SERVER_PORT))
+		with config.lock:
+			port = config.config['Network'].getint('ServerPort', 4004)
+		self.sock.bind(("0.0.0.0", port))
 		self.sock.listen(MAX_CLIENTS)
 
 		while self.running:

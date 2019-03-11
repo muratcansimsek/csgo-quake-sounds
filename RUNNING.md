@@ -16,7 +16,7 @@ Please note that your version of Python should be 3.6 or higher.
 
 ### Server
 
-* Optional: edit config.py
+* Optional: edit config.ini
 
 * `pip3 install protobuf`
 

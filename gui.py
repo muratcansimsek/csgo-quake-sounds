@@ -27,6 +27,7 @@ class MainFrame(wx.Frame):
 
         vbox = wx.BoxSizer(wx.VERTICAL)
         vbox.AddStretchSpacer()
+        vbox.Add(self.make_volume_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
         vbox.Add(self.make_friends_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
         vbox.Add(self.make_settings_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
         vbox.AddStretchSpacer()
@@ -47,16 +48,26 @@ class MainFrame(wx.Frame):
         self.Centre()
         self.Show()
     
+    def make_volume_zone(self):
+        with config.lock:
+            self.volumeSlider = wx.Slider(self.panel, value=config.config['Sounds'].getint('Volume', 50), size=(272, 25))
+        self.Bind(wx.EVT_SLIDER, lambda e: config.set('Sounds', 'Volume', self.volumeSlider.Value), self.volumeSlider)
+
+        volumeZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Volume")
+        volumeZone.Add(self.volumeSlider)
+        return volumeZone
+    
     # TODO
     # It isn't very clear that this is REQUIRED for sounds to work
     # Also, "Friends code" doesn't look important when you play solo
     def make_friends_zone(self):
-        shardCodeBtn = wx.Button(self.panel, label="Set code")
+        shardCodeBtn = wx.Button(self.panel, label="Join room")
         self.Bind(wx.EVT_BUTTON, self.UpdateShardCode, shardCodeBtn)
-        self.shardCodeIpt = wx.TextCtrl(self.panel, value=config.SHARD_CODE, size=(164, shardCodeBtn.GetMinSize().GetHeight()))
-        shardCodeExplanationTxt = wx.StaticText(self.panel, label="To make sure you are in the same server as your\nfriends, use the same friends code.")
+        with config.lock:
+            self.shardCodeIpt = wx.TextCtrl(self.panel, value=config.config['Sounds'].get('Room', ''), size=(164, shardCodeBtn.GetMinSize().GetHeight()))
+        shardCodeExplanationTxt = wx.StaticText(self.panel, label="To make sure you are in the same server as your\nfriends, join the same room.")
 
-        friendsZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Friends code")
+        friendsZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Room")
         friendsZone.Add(shardCodeExplanationTxt, border=5, flag=wx.LEFT | wx.DOWN)
         friendsInputZone = wx.BoxSizer(wx.HORIZONTAL)
         friendsInputZone.Add(self.shardCodeIpt, border=5, flag=wx.ALIGN_CENTER_VERTICAL | wx.ALL)
@@ -67,16 +78,15 @@ class MainFrame(wx.Frame):
     
     def make_settings_zone(self):
         self.preferHeadshotsChk = wx.CheckBox(self.panel, label="Prefer headshot sounds over killstreak sounds")
-        self.preferHeadshotsChk.SetValue(config.HEADSHOTS_OVERRIDE)
-        whenAliveTxt = wx.StaticText(self.panel, label="When alive:")
         self.downloadWhenAliveChk = wx.CheckBox(self.panel, label="Download custom sounds")
-        self.downloadWhenAliveChk.SetValue(config.DOWNLOAD_WHEN_ALIVE)
         self.uploadWhenAliveChk = wx.CheckBox(self.panel, label="Upload custom sounds")
-        self.uploadWhenAliveChk.SetValue(config.UPLOAD_WHEN_ALIVE)
+
+        whenAliveTxt = wx.StaticText(self.panel, label="When alive:")
         whenAliveWarningTxt = wx.StaticText(self.panel, label="(can impact gameplay on slow connections)")
+
         openSoundDirBtn = wx.Button(self.panel, label="Open sounds directory")
-        self.Bind(wx.EVT_BUTTON, self.OpenSoundsDir, openSoundDirBtn)
         self.updateSoundsBtn = wx.Button(self.panel, label="Update sounds")
+        self.Bind(wx.EVT_BUTTON, self.OpenSoundsDir, openSoundDirBtn)
         self.Bind(wx.EVT_BUTTON, self.UpdateSounds, self.updateSoundsBtn)
 
         soundBtns = wx.BoxSizer(wx.HORIZONTAL)
@@ -91,6 +101,17 @@ class MainFrame(wx.Frame):
         settingsBox.Add(whenAliveWarningTxt, border=5, flag=wx.ALL)
         settingsBox.Add(soundBtns, border=5, flag=wx.ALIGN_CENTER | wx.UP | wx.DOWN)
 
+        with config.lock:
+            preferHeadshots = config.config['Sounds'].getboolean('PreferHeadshots', False)
+            downloadWhenAlive = config.config['Network'].getboolean('DownloadWhenAlive', False)
+            uploadWhenAlive = config.config['Network'].getboolean('UploadWhenAlive', False)
+        self.preferHeadshotsChk.SetValue(preferHeadshots)
+        self.downloadWhenAliveChk.SetValue(downloadWhenAlive)
+        self.uploadWhenAliveChk.SetValue(uploadWhenAlive)
+        self.Bind(wx.EVT_CHECKBOX, lambda e: config.set('Sounds', 'PreferHeadshots', self.preferHeadshotsChk.Value), self.preferHeadshotsChk)
+        self.Bind(wx.EVT_CHECKBOX, lambda e: config.set('Network', 'DownloadWhenAlive', self.downloadWhenAliveChk.Value), self.downloadWhenAliveChk)
+        self.Bind(wx.EVT_CHECKBOX, lambda e: config.set('Network', 'UploadWhenAlive', self.uploadWhenAliveChk.Value), self.uploadWhenAliveChk)
+
         return settingsBox
 
     def OpenSoundsDir(self, event):
@@ -99,6 +120,7 @@ class MainFrame(wx.Frame):
     
     def UpdateShardCode(self, event):
         self.client.shard_code = self.shardCodeIpt.GetValue()
+        config.set('Sounds', 'Room', self.shardCodeIpt.GetValue())
         threading.Thread(target=self.client.client_update, daemon=True).start()
     
     def UpdateSounds(self, event):
@@ -110,6 +132,5 @@ class MainFrame(wx.Frame):
             self.Hide()
     
     def OnClose(self, event):
-        self.taskbarIcon.RemoveIcon()
         self.taskbarIcon.Destroy()
         self.Destroy()

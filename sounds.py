@@ -51,7 +51,7 @@ class SoundManager:
         self.cache = {}
         self.playerid = None
         self.client = None
-        self.sound_time = 0
+        self.volume = 1.0
 
     def init(self, client):
         self.client = client
@@ -108,13 +108,13 @@ class SoundManager:
             return True
         
         with self.cache_lock:
-            # debug
-            print('Latency: %ss' % str(datetime.now() - self.sound_time))
-
             # Sound is already loaded
             if packet.sound_hash in self.cache:
                 print('[+] Playing %s' % small_hash(packet.sound_hash))
-                self.cache[packet.sound_hash].play()
+                player = pyglet.media.Player()
+                player.volume = self.volume
+                player.queue(self.cache[packet.sound_hash])
+                player.play()
                 return True
             else:
                 filename = 'cache/' + packet.sound_hash.hex()
@@ -122,7 +122,10 @@ class SoundManager:
                     # Sound is downloaded but not loaded
                     print('[+] Loading and playing %s' % small_hash(packet.sound_hash))
                     self.cache[packet.sound_hash] = pyglet.media.load(filename, streaming=True)
-                    self.cache[packet.sound_hash].play()
+                    player = pyglet.media.Player()
+                    player.volume = self.volume
+                    player.queue(self.cache[packet.sound_hash])
+                    player.play()
                     return True
                 else:
                     # Sound is not downloaded
@@ -139,7 +142,10 @@ class SoundManager:
             self.wanted_sounds.remove(hash)
             if wanted_time + 1000 > datetime.now():
                 return
-            self.cache[hash].play()
+            player = pyglet.media.Player()
+            player.volume = self.volume
+            player.queue(self.cache[hash])
+            player.play()
             print('[+] Playing %s (%f ms late)' % (small_hash(hash), datetime.now() - wanted_time))
     
     def save(self, packet):
@@ -161,7 +167,6 @@ class SoundManager:
         
         hash = self.get_random(update_type, state)
         if hash != None:
-            self.sound_time = datetime.now()
             packet = GameEvent()
             packet.update = update_type
             packet.proposed_sound_hash = hash

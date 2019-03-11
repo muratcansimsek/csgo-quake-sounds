@@ -12,7 +12,7 @@ setup(  name = "ccs",
         options = {"build_exe": {
             "packages": ["os", "wx", "pyglet", "google.protobuf", "steamfiles"],
             "excludes": ["tkinter"],
-            "include_files": ["cache", "sounds", "gamestate_integration_ccs.cfg", "icon.ico"],
+            "include_files": ["cache", "sounds", "gamestate_integration_ccs.cfg", "icon.ico", "config.ini"],
             "bin_includes": ["avbin64.dll"],
             "optimize": 2,
             "include_msvcr": True,

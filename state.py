@@ -3,11 +3,9 @@ import json
 from threading import Lock
 from http.server import BaseHTTPRequestHandler
 
+import config
 from sounds import sounds
-from config import HEADSHOTS_OVERRIDE
 from packets_pb2 import GameEvent
-
-prefer_headshots = HEADSHOTS_OVERRIDE
 
 class PlayerState:
     def __init__(self, json):
@@ -156,6 +154,8 @@ class PlayerState:
                 # Headshot
                 if self.round_headshots == old_state.round_headshots + 1:
                     # Headshot override : always play Headshot
+                    with config.lock:
+                        prefer_headshots = config.config['Sounds'].getboolean('PreferHeadshots', False)
                     if prefer_headshots:
                         sounds.send(GameEvent.HEADSHOT, self)
                         return
@@ -202,11 +202,6 @@ class CSGOState:
         should_update_client = False
         with self.lock:
             newstate = PlayerState(json)
-            
-            # Update headshot preference
-            global prefer_headshots
-            if self.client != None:
-                prefer_headshots = self.client.gui.preferHeadshotsChk.Value
 
             if self.old_state == None or self.old_state.steamid != newstate.steamid or self.old_state.is_ingame != newstate.is_ingame:
                 should_update_client = True

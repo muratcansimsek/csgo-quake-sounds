@@ -5,7 +5,7 @@ from queue import Empty, Queue
 from time import sleep
 from threading import Thread, Lock
 
-from config import SOUND_SERVER_IP, SOUND_SERVER_PORT
+import config
 from packets_pb2 import PacketInfo, GameEvent, PlaySound, SoundRequest, SoundResponse, ClientUpdate
 from sounds import sounds
 from state import state, PostHandler
@@ -175,7 +175,10 @@ class Client:
 		with self.sock_lock:
 			if not self.connected:
 				try:
-					self.sock = socket.create_connection((SOUND_SERVER_IP, SOUND_SERVER_PORT))
+					with config.lock:
+						ip = config.config['Network'].get('ServerIP', 'kiwec.net')
+						port = config.config['Network'].getint('ServerPort', 4004)
+					self.sock = socket.create_connection((ip, port))
 
 					# Windows only keepalive - TODO linux/osx
 					self.sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, 10000, 3000))

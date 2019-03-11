@@ -1,5 +1,14 @@
-- Saved config outside of config.py
-- Errors windows
+- Show file loading error msgboxes
+- Download sounds before play : requires server rewrite
+    -> Don't download/upload when room is b''
+    -> Send SOUNDS_LIST every time user switches shard
+        -> Client needs to respond
+    -> Shards need to keep track of cached sounds
+    -> Server client classes need to keep track of cached/uncached sounds
+    -> Notify clients when a new sound is cached ?
+- Prioritize download/upload of latest requested sound
+    -> Don't prefer upload when a download is requested
+- Drop connection on error
 
 Bonus:
 - Encrypted connection

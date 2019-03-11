@@ -1,15 +1,16 @@
-# When this is True, the "headshot" sound will be preferred over killstreak sounds.
-# e.g. when killing a second player, "double kill" would play on bodyshot, but "headshot" on headshot.
-# The default behavior being playing "double kill" even when the second kill is a headshot.
-HEADSHOTS_OVERRIDE = False
+import configparser
+from threading import Lock, Thread
 
-# The friends you play with will also have to edit SOUND_SERVER_IP - it should be easier
-# to modify it yourself and follow the build instructions in the README.
-# You could then give them an installer with your own sounds bundled in.
-SOUND_SERVER_IP = 'kiwec.net'
-SOUND_SERVER_PORT = 4004
+lock = Lock()
+config = configparser.ConfigParser()
+config.read('config.ini')
 
-DOWNLOAD_WHEN_ALIVE = True
-UPLOAD_WHEN_ALIVE = False
+def saveCfg():
+    with lock:
+        with open('config.ini', 'w') as outfile:
+            config.write(outfile, space_around_delimiters=True)
 
-SHARD_CODE = ''
+def set(section, option, val):
+    with lock:
+        config.set(section, option, str(val))
+    Thread(target=saveCfg, daemon=False).start()
