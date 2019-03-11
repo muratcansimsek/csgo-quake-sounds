@@ -80,7 +80,7 @@ class Client:
 		header.type = PacketInfo.SOUND_REQUEST
 		header.length = len(raw_packet)
 		with self.lock:
-			print('%s Sending %s packet' % (str(self.addr), PacketInfo.Type.Name(type)))
+			# print('%s Sending %s packet' % (str(self.addr), PacketInfo.Type.Name(type)))
 			self.sock.sendall(header.SerializeToString())
 			self.sock.sendall(raw_packet)
 	
@@ -206,7 +206,7 @@ class Client:
 
 					packet_info = PacketInfo()
 					packet_info.ParseFromString(data)
-					print('%s Received %s packet' % (str(self.addr), PacketInfo.Type.Name(packet_info.type)))
+					# print('%s Received %s packet' % (str(self.addr), PacketInfo.Type.Name(packet_info.type)))
 
 					if packet_info.length > 2 * 1024 * 1024:
 						# Don't allow files or packets over 2 Mb

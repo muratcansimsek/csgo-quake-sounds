@@ -3,6 +3,7 @@ import hashlib
 import pyglet
 import random
 import os
+import wx
 from datetime import datetime
 from threading import Lock
 
@@ -15,7 +16,7 @@ class SampleCollection:
         self.name = path
         self.samples = []
 
-    def load(self, filename_list, file_callback):
+    def load(self, filename_list, file_callback, error_callback):
         """Loads the sound list"""
         for filename in filename_list:
             hash = hashlib.blake2b()
@@ -30,7 +31,8 @@ class SampleCollection:
                 file = pyglet.media.load(filename, streaming=should_stream)
                 print(' + Loaded %s (%s)' % (small_hash(digest), filename))
             except Exception as e:
-                print(" ! Failed to load \"" + filename + "\": " + str(e))
+                msg = 'Error while loading "%s":\n%s' % (filename, str(e))
+                error_callback(msg)
             else:
                 self.samples.append(digest)
                 file_callback(digest, file)
@@ -56,14 +58,14 @@ class SoundManager:
     def init(self, client):
         self.client = client
 
-    def load(self, one_sound_loaded_callback):
+    def load(self, one_sound_loaded_callback, error_callback):
         """Reloads all sounds from the sounds/ folder"""
         with self.cache_lock:
             for path in os.listdir('sounds'):
                 complete_path = 'sounds/' + path
                 if not os.path.isfile(complete_path):
                     self.collections[path] = SampleCollection(complete_path)
-                    self.collections[path].load(self.sound_list(complete_path), one_sound_loaded_callback)
+                    self.collections[path].load(self.sound_list(complete_path), one_sound_loaded_callback, error_callback)
         
     def sound_list(self, sounds_dir):
         """Returns the list of sounds in a directory and its subdirectories"""

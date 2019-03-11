@@ -1,4 +1,3 @@
-- Show file loading error msgboxes
 - Download sounds before play : requires server rewrite
     -> Don't download/upload when room is b''
     -> Send SOUNDS_LIST every time user switches shard
@@ -8,7 +7,6 @@
     -> Notify clients when a new sound is cached ?
 - Prioritize download/upload of latest requested sound
     -> Don't prefer upload when a download is requested
-- Drop connection on error
 
 Bonus:
 - Encrypted connection

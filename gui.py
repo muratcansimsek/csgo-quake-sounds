@@ -65,7 +65,8 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.UpdateShardCode, shardCodeBtn)
         with config.lock:
             self.shardCodeIpt = wx.TextCtrl(self.panel, value=config.config['Sounds'].get('Room', ''), size=(164, shardCodeBtn.GetMinSize().GetHeight()))
-        shardCodeExplanationTxt = wx.StaticText(self.panel, label="To make sure you are in the same server as your\nfriends, join the same room.")
+        self.shardCodeIpt.SetFocus()
+        shardCodeExplanationTxt = wx.StaticText(self.panel, label="In order to hear your teammates' sounds, you\nneed to join the same room.")
 
         friendsZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Room")
         friendsZone.Add(shardCodeExplanationTxt, border=5, flag=wx.LEFT | wx.DOWN)

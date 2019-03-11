@@ -21,6 +21,10 @@ class Client:
 
 		self.download_queue = Queue()
 		self.upload_queue = Queue()
+		self.downloaded = 0
+		self.download_total = 0
+		self.uploaded = 0
+		self.upload_total = 0
 
 	def init(self, gui):
 		"""Non-blocking init"""
@@ -92,12 +96,16 @@ class Client:
 		wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.loaded_sounds, self.max_sounds))
 		self.loaded_sounds = self.loaded_sounds + 1
 	
+	def error_callback(self, msg):
+		dialog = wx.GenericMessageDialog(self.gui, message=msg, caption='Sound loading error', style=wx.OK | wx.ICON_ERROR)
+		wx.CallAfter(dialog.ShowModal)
+	
 	def reload_sounds(self):
 		"""Reloads all sounds. Not thread safe, should only be called from GUI"""
 		self.loaded_sounds = 0
 		self.max_sounds = len(sounds.sound_list('sounds'))
 
-		sounds.load(self.file_callback)
+		sounds.load(self.file_callback, self.error_callback)
 		wx.CallAfter(self.gui.updateSoundsBtn.Enable)
 		self.update_status()
 
@@ -113,12 +121,14 @@ class Client:
 
 	def request_sound(self, hash):
 		if state.is_alive() and not self.gui.downloadWhenAliveChk.Value:
-			self.download_queue.put(packet.sound_hash)
+			self.download_queue.put(hash)
 			return
 
+		wx.CallAfter(self.gui.SetStatusText, 'Downloading %s... (%d/%d)' % (small_hash(hash), self.downloaded + 1, self.download_total))
 		packet = SoundRequest()
 		packet.sound_hash.append(hash)
 		self.send(PacketInfo.SOUND_REQUEST, packet)
+		self.downloaded = self.downloaded + 1
 
 		if not state.is_alive() or self.gui.downloadWhenAliveChk.Value:
 			# Still not playing : request more sounds!
@@ -133,12 +143,13 @@ class Client:
 			self.upload_queue.put(hash)
 			return
 
-		wx.CallAfter(self.gui.SetStatusText, 'Uploading %s...' % small_hash(hash))
+		wx.CallAfter(self.gui.SetStatusText, 'Uploading %s... (%d/%d)' % (small_hash(hash), self.uploaded + 1, self.upload_total))
 		with open('cache/' + hash.hex(), 'rb') as infile:
 			packet = SoundResponse()
 			packet.data = infile.read()
 			packet.hash = hash
 			self.send(PacketInfo.SOUND_RESPONSE, packet)
+			self.uploaded = self.uploaded + 1
 
 		if not state.is_alive() or self.gui.uploadWhenAliveChk.Value:
 			# Still not playing : send more sounds!
@@ -155,12 +166,14 @@ class Client:
 			packet = PlaySound()
 			packet.ParseFromString(raw_packet)
 			if not sounds.play(packet):
+				self.download_total = self.download_total + 1
 				self.request_sound(packet.sound_hash)
 		elif packet_type == PacketInfo.SOUND_REQUEST:
 			req = SoundRequest()
 			req.ParseFromString(raw_packet)
 
 			for hash in req.sound_hash:
+				self.upload_total = self.upload_total + 1
 				self.respond_sound(hash)
 		elif packet_type == PacketInfo.SOUND_RESPONSE:
 			packet = SoundResponse()
@@ -248,8 +261,7 @@ class Client:
 			except ConnectionResetError:
 				self.connected = False
 			except socket.timeout:
-				pass
+				self.connected = False
 			except socket.error as msg:
 				print("Connection error: " + str(msg))
 				self.connected = False
-				continue
