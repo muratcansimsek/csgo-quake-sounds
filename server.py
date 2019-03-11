@@ -1,4 +1,5 @@
 """Sound server used to sync sounds between players"""
+import datetime
 import hashlib
 import os
 import signal
@@ -20,6 +21,10 @@ class Shard:
 		self.lock = Lock()
 		self.round = 0
 		self.round_events = []
+
+		# List of available sound hashes
+		# Every sound in this list will be downloaded by users that join the shard
+		self.sounds = []
 
 	def play(self, steamid, hash):
 		packet = PlaySound()
@@ -67,7 +72,14 @@ class Client:
 		self.sock = sock
 		self.addr = addr
 		self.steamid = 0
+
 		self.shard = None
+		self.last_shard_change = 0
+
+		# List of sound hashes the user posesses
+		# The sounds may not be cached by the server
+		self.sounds = []
+
 		self.map = ''
 		self.round = 0
 		self.ingame = False
@@ -89,6 +101,9 @@ class Client:
 		sound_request = SoundRequest()
 		with self.server.cache_lock:
 			for hash in hashes:
+				with self.lock:
+					if hash not in self.sounds:
+						self.sounds.append(hash)
 				if hash not in self.server.cache:
 					sound_request.sound_hash.append(hash)
 		if len(sound_request.sound_hash) == 0:
@@ -101,18 +116,20 @@ class Client:
 	def handle_event(self, packet):
 		with self.lock:
 			self.round = packet.round
-			if self.shard == None:
-				return
 
 		event_class = get_event_class(packet)
 		self.check_or_request_sounds([packet.proposed_sound_hash])
 
-		if event_class == 'shared':
-			self.shard.play_shared(packet.update, packet.proposed_sound_hash)
-		else:
-			self.shard.play(self.steamid if event_class == 'normal' else 0, packet.proposed_sound_hash)
+		with self.lock:
+			if self.shard == None:
+				return
+			if event_class == 'shared':
+				self.shard.play_shared(packet.update, packet.proposed_sound_hash)
+			else:
+				self.shard.play(self.steamid if event_class == 'normal' else 0, packet.proposed_sound_hash)
 	
 	def send_sound(self, packet):
+		"""Handles a SoundRequest packet - LOCKS"""
 		with self.server.cache_lock:
 			if not packet.sound_hash in self.server.cache:
 				return
@@ -127,6 +144,7 @@ class Client:
 		self.send(PacketInfo.SOUND_RESPONSE, res)
 	
 	def save_sound(self, packet):
+		"""Handles a SoundResponse packet - LOCKS"""
 		verif = hashlib.blake2b()
 		verif.update(packet.data)
 		if packet.hash != verif.digest():
@@ -146,29 +164,80 @@ class Client:
 			self.server.cache.append(packet.hash)
 		with self.lock:
 			print('%s Saved %s' % (str(self.addr), small_hash(packet.hash)))
-		
+			self.sounds.append(packet.hash)
+			shard = self.shard
+		if shard != None:
+			packet = SoundRequest()
+			packet.sound_hash.append(hash)
+
+			# Add hash to shard sound list and notify clients
+			with shard.lock:
+				shard.sounds.append(hash)
+				for client in shard.clients:
+					should_send = False
+					with client.lock:
+						if hash not in client.sounds:
+							should_send = True
+					if should_send:
+						client.send(PacketInfo.SOUNDS_LIST, packet)
+
+	def join_shard(self, name):
+		"""Join a shard by name - DOES NOT LOCK"""
+		if name == b'':
+			self.shard = None
+			return
+
+		print('%s (steamid %d) is now in shard %s' % (str(self.addr), self.steamid, name.decode('utf-8')))
+		self.last_shard_change = datetime.datetime.now()
+		new_shard = self.server.get_shard(name)
+		with new_shard.lock:
+			new_shard.clients.append(self)
+			self.shard = new_shard
+
+			# Add client's cached sounds to shard's download list
+			with self.server.cache_lock:
+				for hash in self.sounds:
+					if hash in self.server.cache and hash not in new_shard.sounds:
+						new_shard.sounds.append(hash)
+			
+			# Send missing sounds list (as in the client doesn't have them) to client
+			packet = SoundRequest()
+			for hash in new_shard.sounds:
+				if hash not in self.sounds:
+					packet.sound_hash.append(hash)
+		self.send(PacketInfo.SOUNDS_LIST, packet)
+
+	def leave_shard(self):
+		"""Leave the shard the Client is in - DOES NOT LOCK"""
+		if self.shard == None:
+			return
+		self.last_shard_change = datetime.datetime.now()
+		old_shard = self.shard
+		with old_shard.lock:
+			old_shard.clients.remove(self)
+
+			# No users left : remove shard from server
+			if len(old_shard.clients) == 0:
+				with self.server.shards_lock:
+					self.server.shards.remove(old_shard.name)
+
 	def update(self, packet):
 		with self.lock:
 			self.ingame = packet.status == ClientUpdate.CONNECTED
 			self.map = packet.map
 			self.steamid = packet.steamid
 
-			# Update shard
-			if self.shard == None:
-				new_shard = self.server.get_shard(packet.shard_code)
-				with new_shard.lock:
-					new_shard.clients.append(self)
-					self.shard = new_shard
-			elif self.shard.name != packet.shard_code:
-				print('%s (steamid %d) is now in shard %s' % (str(self.addr), self.steamid, packet.shard_code))
-				old_shard = self.server.get_shard(self.shard.name)
-				with old_shard.lock:
-					old_shard.clients.remove(self)
+			if self.shard == None and packet.shard_code == b'':
+				return
+			if self.shard.name == packet.shard_code:
+				return
+			# Don't allow client to switch shards more than 1x/second
+			# TODO add restriction on client
+			if self.last_shard_change + datetime.timedelta(seconds=1) > datetime.datetime.now():
+				return
 
-				new_shard = self.server.get_shard(packet.shard_code)
-				with new_shard.lock:
-					new_shard.clients.append(self)
-					self.shard = new_shard
+			self.leave_shard()
+			self.join_shard(packet.shard_code)
 
 	def handle(self, packet_type, raw_packet):
 		if packet_type == PacketInfo.GAME_EVENT:
@@ -225,10 +294,8 @@ class Client:
 				print('%s Error: %s' % (str(self.addr), str(msg)))
 				break
 
-		if self.shard != None:
-			with self.shard.lock:
-				self.shard.clients.remove(self)
-
+		with self.lock:
+			self.leave_shard()
 		print(str(self.addr) + " left")
 
 
@@ -242,7 +309,7 @@ class Server:
 		self.shards_lock = Lock()
 		self.shards = {}
 
-	def shutdown(self):
+	def shutdown(self, signum, frame):
 		self.running = False
 
 	def init_sound_cache(self):

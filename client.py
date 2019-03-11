@@ -180,6 +180,14 @@ class Client:
 			packet.ParseFromString(raw_packet)
 			sounds.save(packet)
 			sounds.play_received(packet.hash)
+		elif packet_type == PacketInfo.SOUNDS_LIST:
+			packet = SoundRequest()
+			packet.ParseFromString(raw_packet)
+			for hash in packet.sound_hash:
+				with sounds.cache_lock:
+					if hash not in sounds.cache:
+						self.download_total = self.download_total + 1
+						self.request_sound(hash)
 		else:
 			print("Unhandle packet type!")
 
