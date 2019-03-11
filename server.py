@@ -74,7 +74,7 @@ class Client:
 		self.steamid = 0
 
 		self.shard = None
-		self.last_shard_change = 0
+		self.last_shard_change = datetime.datetime.min
 
 		# List of sound hashes the user posesses
 		# The sounds may not be cached by the server
@@ -229,11 +229,11 @@ class Client:
 
 			if self.shard == None and packet.shard_code == b'':
 				return
-			if self.shard.name == packet.shard_code:
+			if server.shard != None and self.shard.name == packet.shard_code:
 				return
 			# Don't allow client to switch shards more than 1x/second
 			# TODO add restriction on client
-			if self.last_shard_change + datetime.timedelta(seconds=1) > datetime.datetime.now():
+			if (datetime.datetime.now() - self.last_shard_change).seconds < 1:
 				return
 
 			self.leave_shard()

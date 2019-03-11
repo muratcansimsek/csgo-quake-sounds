@@ -50,8 +50,10 @@ class MainFrame(wx.Frame):
     
     def make_volume_zone(self):
         with config.lock:
-            self.volumeSlider = wx.Slider(self.panel, value=config.config['Sounds'].getint('Volume', 50), size=(272, 25))
-        self.Bind(wx.EVT_SLIDER, lambda e: config.set('Sounds', 'Volume', self.volumeSlider.Value), self.volumeSlider)
+            volume = config.config['Sounds'].getint('Volume', 50)
+        sounds.volume = volume / 100
+        self.volumeSlider = wx.Slider(self.panel, value=volume, size=(272, 25))
+        self.Bind(wx.EVT_SLIDER, self.OnVolumeSlider, self.volumeSlider)
 
         volumeZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Volume")
         volumeZone.Add(self.volumeSlider)
@@ -114,6 +116,10 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_CHECKBOX, lambda e: config.set('Network', 'UploadWhenAlive', self.uploadWhenAliveChk.Value), self.uploadWhenAliveChk)
 
         return settingsBox
+
+    def OnVolumeSlider(self, event):
+        config.set('Sounds', 'Volume', self.volumeSlider.Value)
+        sounds.volume = self.volumeSlider.Value / 100
 
     def OpenSoundsDir(self, event):
         # TODO linux

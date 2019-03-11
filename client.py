@@ -29,6 +29,7 @@ class Client:
 	def init(self, gui):
 		"""Non-blocking init"""
 		self.gui = gui
+		self.shard_code = gui.shardCodeIpt.GetValue()
 		sounds.init(self)
 		state.init(self)
 		gamestate_server = HTTPServer(('127.0.0.1', 3000), PostHandler)
@@ -267,9 +268,10 @@ class Client:
 						received += len(chunk)
 				self.handle(packet_info.type, data)
 			except ConnectionResetError:
+				print("Connection reset, reconnecting")
 				self.connected = False
 			except socket.timeout:
-				self.connected = False
+				pass
 			except socket.error as msg:
 				print("Connection error: " + str(msg))
 				self.connected = False
