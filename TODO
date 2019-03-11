@@ -1,5 +1,2 @@
-- Prioritize download/upload of latest requested sound
-    -> Don't prefer upload when a download is requested
-
 Bonus:
 - Encrypted connection

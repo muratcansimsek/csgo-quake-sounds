@@ -1,7 +1,7 @@
 import socket
 import wx
 from http.server import HTTPServer
-from queue import Empty, Queue
+from queue import Empty, LifoQueue
 from time import sleep
 from threading import Thread, Lock
 
@@ -19,8 +19,8 @@ class Client:
 		self.reconnect_timeout = 1
 		self.shard_code = ''
 
-		self.download_queue = Queue()
-		self.upload_queue = Queue()
+		self.download_queue = LifoQueue()
+		self.upload_queue = LifoQueue()
 		self.downloaded = 0
 		self.download_total = 0
 		self.uploaded = 0
