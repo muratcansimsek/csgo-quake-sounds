@@ -201,14 +201,11 @@ class Client:
 						ip = config.config['Network'].get('ServerIP', 'kiwec.net')
 						port = config.config['Network'].getint('ServerPort', 4004)
 					self.sock = socket.create_connection((ip, port))
-
-					# Windows only keepalive - TODO linux/osx
-					self.sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, 10000, 3000))
-
 					self.connected = True
 					self.reconnect_timeout = 1
 				except ConnectionRefusedError:
 					self.connected = False
+					self.sock.shutdown(socket.SHUT_RDWR)
 
 					sleep(self.reconnect_timeout)
 					self.reconnect_timeout *= 2
@@ -250,14 +247,16 @@ class Client:
 					if len(data) == 0:
 						print('Invalid header size, reconnecting')
 						self.connected = False
+						self.sock.shutdown(socket.SHUT_RDWR)
 						continue
-					
+
 					packet_info = PacketInfo()
 					packet_info.ParseFromString(data)
 					if packet_info.length > 2 * 1024 * 1024:
 						# Don't allow files or packets over 2 Mb
 						print('Invalid payload size, reconnecting')
 						self.connected = False
+						self.sock.shutdown(socket.SHUT_RDWR)
 						continue
 
 					data = b''
@@ -270,8 +269,10 @@ class Client:
 			except ConnectionResetError:
 				print("Connection reset, reconnecting")
 				self.connected = False
+				self.sock.shutdown(socket.SHUT_RDWR)
 			except socket.timeout:
 				pass
 			except socket.error as msg:
 				print("Connection error: " + str(msg))
 				self.connected = False
+				self.sock.shutdown(socket.SHUT_RDWR)

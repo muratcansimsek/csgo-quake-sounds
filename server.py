@@ -92,7 +92,7 @@ class Client:
 		header.type = PacketInfo.SOUND_REQUEST
 		header.length = len(raw_packet)
 		with self.lock:
-			# print('%s Sending %s packet' % (str(self.addr), PacketInfo.Type.Name(type)))
+			print('%s Sending %s packet' % (str(self.addr), PacketInfo.Type.Name(type)))
 			self.sock.sendall(header.SerializeToString())
 			self.sock.sendall(raw_packet)
 	
@@ -182,29 +182,30 @@ class Client:
 						client.send(PacketInfo.SOUNDS_LIST, packet)
 
 	def join_shard(self, name):
-		"""Join a shard by name - DOES NOT LOCK"""
-		if name == b'':
-			self.shard = None
-			return
+		"""Join a shard by name - LOCKS"""
+		with self.lock:
+			if name == b'':
+				self.shard = None
+				return
 
-		print('%s (steamid %d) is now in shard %s' % (str(self.addr), self.steamid, name.decode('utf-8')))
-		self.last_shard_change = datetime.datetime.now()
-		new_shard = self.server.get_shard(name)
-		with new_shard.lock:
-			new_shard.clients.append(self)
-			self.shard = new_shard
+			print('%s (steamid %d) is now in shard %s' % (str(self.addr), self.steamid, name.decode('utf-8')))
+			self.last_shard_change = datetime.datetime.now()
+			new_shard = self.server.get_shard(name)
+			with new_shard.lock:
+				new_shard.clients.append(self)
+				self.shard = new_shard
 
-			# Add client's cached sounds to shard's download list
-			with self.server.cache_lock:
-				for hash in self.sounds:
-					if hash in self.server.cache and hash not in new_shard.sounds:
-						new_shard.sounds.append(hash)
-			
-			# Send missing sounds list (as in the client doesn't have them) to client
-			packet = SoundRequest()
-			for hash in new_shard.sounds:
-				if hash not in self.sounds:
-					packet.sound_hash.append(hash)
+				# Add client's cached sounds to shard's download list
+				with self.server.cache_lock:
+					for hash in self.sounds:
+						if hash in self.server.cache and hash not in new_shard.sounds:
+							new_shard.sounds.append(hash)
+				
+				# Send missing sounds list (as in the client doesn't have them) to client
+				packet = SoundRequest()
+				for hash in new_shard.sounds:
+					if hash not in self.sounds:
+						packet.sound_hash.append(hash)
 		self.send(PacketInfo.SOUNDS_LIST, packet)
 
 	def leave_shard(self):
@@ -219,7 +220,7 @@ class Client:
 			# No users left : remove shard from server
 			if len(old_shard.clients) == 0:
 				with self.server.shards_lock:
-					self.server.shards.remove(old_shard.name)
+					del self.server.shards[old_shard.name]
 
 	def update(self, packet):
 		with self.lock:
@@ -229,7 +230,7 @@ class Client:
 
 			if self.shard == None and packet.shard_code == b'':
 				return
-			if server.shard != None and self.shard.name == packet.shard_code:
+			if self.shard != None and self.shard.name == packet.shard_code:
 				return
 			# Don't allow client to switch shards more than 1x/second
 			# TODO add restriction on client
@@ -237,7 +238,7 @@ class Client:
 				return
 
 			self.leave_shard()
-			self.join_shard(packet.shard_code)
+		self.join_shard(packet.shard_code)
 
 	def handle(self, packet_type, raw_packet):
 		if packet_type == PacketInfo.GAME_EVENT:
@@ -275,7 +276,7 @@ class Client:
 
 					packet_info = PacketInfo()
 					packet_info.ParseFromString(data)
-					# print('%s Received %s packet' % (str(self.addr), PacketInfo.Type.Name(packet_info.type)))
+					print('%s Received %s packet' % (str(self.addr), PacketInfo.Type.Name(packet_info.type)))
 
 					if packet_info.length > 2 * 1024 * 1024:
 						# Don't allow files or packets over 2 Mb
@@ -296,7 +297,8 @@ class Client:
 
 		with self.lock:
 			self.leave_shard()
-		print(str(self.addr) + " left")
+			self.sock.shutdown(socket.SHUT_RDWR)
+			print(str(self.addr) + " left")
 
 
 class Server:
