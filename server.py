@@ -167,19 +167,19 @@ class Client:
 			self.sounds.append(packet.hash)
 			shard = self.shard
 		if shard != None:
-			packet = SoundRequest()
-			packet.sound_hash.append(hash)
+			req = SoundRequest()
+			req.sound_hash.append(packet.hash)
 
 			# Add hash to shard sound list and notify clients
 			with shard.lock:
-				shard.sounds.append(hash)
+				shard.sounds.append(packet.hash)
 				for client in shard.clients:
 					should_send = False
 					with client.lock:
-						if hash not in client.sounds:
+						if packet.hash not in client.sounds:
 							should_send = True
 					if should_send:
-						client.send(PacketInfo.SOUNDS_LIST, packet)
+						client.send(PacketInfo.SOUNDS_LIST, req)
 
 	def join_shard(self, name):
 		"""Join a shard by name - LOCKS"""

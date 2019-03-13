@@ -17,4 +17,4 @@ setup(  name = "ccs",
             "optimize": 2,
             "include_msvcr": True,
         }},
-        executables = [Executable("main.py", base=base)])
+        executables = [Executable("main.py", base=base, targetName="csgo-custom-sounds.exe")])
