@@ -1,18 +1,11 @@
 """Plays quake sounds according to CSGO Gamestate"""
-import os
 from steamfiles import acf
-import subprocess
-import sys
-import threading
 import winreg
 import wx
 from shutil import copyfile
 
-import time
-
 # Local files
 import gui
-from sounds import sounds
 
 # Get steam path from windows registry - TODO linux
 def get_steam_path():
@@ -37,7 +30,7 @@ def main():
 	copyfile("gamestate_integration_ccs.cfg", csgo_dir + "\\csgo\\cfg\\gamestate_integration_ccs.cfg")
 
 	app = wx.App()
-	frame = gui.MainFrame(None, title="CSGO Custom Sounds", size=wx.Size(320, 420), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
+	gui.MainFrame(None, title="CSGO Custom Sounds", size=wx.Size(320, 420), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
 	app.MainLoop()
 
 if __name__ == "__main__":

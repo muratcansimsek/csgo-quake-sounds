@@ -3,7 +3,6 @@ import hashlib
 import pyglet
 import random
 import os
-import wx
 from datetime import datetime
 from threading import Lock
 

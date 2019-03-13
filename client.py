@@ -6,10 +6,10 @@ from time import sleep
 from threading import Thread, Lock
 
 import config
-from packets_pb2 import PacketInfo, GameEvent, PlaySound, SoundRequest, SoundResponse, ClientUpdate
+from packets_pb2 import PacketInfo, PlaySound, SoundRequest, SoundResponse, ClientUpdate
 from sounds import sounds
 from state import state, PostHandler
-from util import print, small_hash
+from util import print
 
 class Client:
 	def __init__(self):
@@ -67,16 +67,22 @@ class Client:
 		self.send(PacketInfo.CLIENT_UPDATE, packet)
 
 	def update_status(self):
-		if not self.connected:
-			wx.CallAfter(self.gui.SetStatusText, 'Connecting to sound sync server...')
-			return
-		with state.lock:
-			if state.old_state == None:
-				wx.CallAfter(self.gui.SetStatusText, 'Waiting for CS:GO...')
-			elif state.old_state.is_ingame:
-				wx.CallAfter(self.gui.SetStatusText, '%s - round %s - steamID %s' % (state.old_state.phase, state.old_state.current_round, state.old_state.steamid))
-			else:
-				wx.CallAfter(self.gui.SetStatusText, 'Ready.')
+		with self.lock:
+			if not self.connected:
+				wx.CallAfter(self.gui.SetStatusText, 'Connecting to sound sync server...')
+				return
+			with state.lock:
+				if state.old_state == None:
+					wx.CallAfter(self.gui.SetStatusText, 'Waiting for CS:GO...')
+				elif state.old_state.is_ingame:
+					phase = state.old_state.phase
+					if phase == 'unknown':
+						phase = ''
+					else:
+						phase = ' (%s)' % phase
+					wx.CallAfter(self.gui.SetStatusText, 'Room "%s" - Round %s%s' % (self.shard_code, state.old_state.current_round, phase))
+				else:
+					wx.CallAfter(self.gui.SetStatusText, 'Room "%s" - Not in a match.' % self.shard_code)
 		
 	def file_callback(self, hash, file):
 		sounds.cache[hash] = file
@@ -111,7 +117,7 @@ class Client:
 			self.download_queue.put(hash)
 			return
 
-		wx.CallAfter(self.gui.SetStatusText, 'Downloading %s... (%d/%d)' % (small_hash(hash), self.downloaded + 1, self.download_total))
+		wx.CallAfter(self.gui.SetStatusText, 'Downloading sound %d/%d...' % (self.downloaded + 1, self.download_total))
 		packet = SoundRequest()
 		packet.sound_hash.append(hash)
 		self.send(PacketInfo.SOUND_REQUEST, packet)
@@ -130,7 +136,7 @@ class Client:
 			self.upload_queue.put(hash)
 			return
 
-		wx.CallAfter(self.gui.SetStatusText, 'Uploading %s... (%d/%d)' % (small_hash(hash), self.uploaded + 1, self.upload_total))
+		wx.CallAfter(self.gui.SetStatusText, 'Uploading sound %d/%d...' % (self.uploaded + 1, self.upload_total))
 		with open('cache/' + hash.hex(), 'rb') as infile:
 			packet = SoundResponse()
 			packet.data = infile.read()
