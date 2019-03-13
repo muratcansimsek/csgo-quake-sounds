@@ -51,20 +51,6 @@ class Client:
 			self.sock.sendall(raw_packet)
 			self.packet_sent = True
 
-		round_change_types = [ GameEvent.ROUND_WIN, GameEvent.ROUND_LOSE, GameEvent.SUICIDE, GameEvent.DEATH, GameEvent.ROUND_START ]
-		if type == PacketInfo.GAME_EVENT:
-			if packet.update in round_change_types:
-				try:
-					item = self.download_queue.get(block=False)
-					self.request_sound(item)
-				except Empty:
-					pass
-				try:
-					item = self.upload_queue.get(block=False)
-					self.respond_sound(item)
-				except Empty:
-					pass
-
 	def client_update(self):
 		packet = ClientUpdate()
 		with state.lock:
@@ -271,7 +257,16 @@ class Client:
 				self.connected = False
 				self.sock.shutdown(socket.SHUT_RDWR)
 			except socket.timeout:
-				pass
+				try:
+					item = self.download_queue.get(block=False)
+					self.request_sound(item)
+				except Empty:
+					pass
+				try:
+					item = self.upload_queue.get(block=False)
+					self.respond_sound(item)
+				except Empty:
+					pass
 			except socket.error as msg:
 				print("Connection error: " + str(msg))
 				self.connected = False

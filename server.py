@@ -89,7 +89,7 @@ class Client:
 	def send(self, type, packet):
 		raw_packet = packet.SerializeToString()
 		header = PacketInfo()
-		header.type = PacketInfo.SOUND_REQUEST
+		header.type = type
 		header.length = len(raw_packet)
 		with self.lock:
 			print('%s Sending %s packet' % (str(self.addr), PacketInfo.Type.Name(type)))
@@ -297,7 +297,10 @@ class Client:
 
 		with self.lock:
 			self.leave_shard()
-			self.sock.shutdown(socket.SHUT_RDWR)
+			try:
+				self.sock.shutdown(socket.SHUT_RDWR)
+			except:
+				pass
 			print(str(self.addr) + " left")
 
 
