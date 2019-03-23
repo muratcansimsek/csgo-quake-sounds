@@ -123,10 +123,12 @@ class Client:
 		with self.lock:
 			if self.shard == None:
 				return
-			if event_class == 'shared':
-				self.shard.play_shared(packet.update, packet.proposed_sound_hash)
-			else:
-				self.shard.play(self.steamid if event_class == 'normal' else 0, packet.proposed_sound_hash)
+			shard = self.shard
+			steamid = self.steamid if event_class == 'normal' else 0
+		if event_class == 'shared':
+			shard.play_shared(packet.update, packet.proposed_sound_hash)
+		else:
+			shard.play(steamid if event_class == 'normal' else 0, packet.proposed_sound_hash)
 	
 	def send_sound(self, packet):
 		"""Handles a SoundRequest packet - LOCKS"""

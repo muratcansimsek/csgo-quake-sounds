@@ -67,7 +67,7 @@ class Client:
 		self.send(PacketInfo.CLIENT_UPDATE, packet)
 
 	def update_status(self):
-		with self.lock:
+		with self.sock_lock:
 			if not self.connected:
 				wx.CallAfter(self.gui.SetStatusText, 'Connecting to sound sync server...')
 				return

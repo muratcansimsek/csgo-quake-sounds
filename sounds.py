@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from threading import Lock
 
+import config
 from packets_pb2 import GameEvent, PacketInfo, PlaySound
 from util import print, get_event_class, small_hash
 
@@ -52,7 +53,8 @@ class SoundManager:
         self.cache = {}
         self.playerid = None
         self.client = None
-        self.volume = 1.0
+        with config.lock:
+            self.volume = float(config.config['Sounds'].getint('Volume', 50)) / 100.0
 
     def init(self, client):
         self.client = client
