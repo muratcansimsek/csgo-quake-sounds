@@ -19,6 +19,11 @@ class SampleCollection:
     def load(self, filename_list, file_callback, error_callback):
         """Loads the sound list"""
         for filename in filename_list:
+            file_stat = os.stat(filename)
+            if file_stat.st_size > 2 * 1024 * 1024:
+                error_callback('File %s is too large (over 2 Mb) and will not be loaded.' % filename)
+                continue
+
             hash = hashlib.blake2b()
             with open(filename, 'rb') as infile:
                 hash.update(infile.read())
