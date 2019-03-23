@@ -278,10 +278,17 @@ class Client:
 
 					packet_info = PacketInfo()
 					packet_info.ParseFromString(data)
-					print('%s Received %s packet' % (str(self.addr), PacketInfo.Type.Name(packet_info.type)))
+					try:
+						packet_type = PacketInfo.Type.Name(packet_info.type)
+						print('%s Received %s packet' % (str(self.addr), packet_type))
+					except:
+						print('%s Received invalid packet type, disconnecting' % str(self.addr))
+						self.sock.shutdown(socket.SHUT_RDWR)
+						break
 
 					if packet_info.length > 2 * 1024 * 1024:
 						# Don't allow files or packets over 2 Mb
+						print('%s Received file over 2Mb, disconnecting' % str(self.addr))
 						break
 
 					data = b''
