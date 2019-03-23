@@ -175,8 +175,8 @@ class SoundManager:
             packet.proposed_sound_hash = hash
             packet.kill_count = state.round_kills
 
-            # Non-shared event : play without waiting for server
-            if get_event_class(packet) != 'shared':
+            # Normal event : play without waiting for server
+            if get_event_class(packet) == 'normal':
                 playpacket = PlaySound()
                 playpacket.steamid = 0
                 playpacket.sound_hash = hash
