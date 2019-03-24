@@ -1,5 +1,6 @@
 """Related to sounds"""
 import hashlib
+import math
 import pyglet
 import random
 import os
