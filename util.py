@@ -15,7 +15,7 @@ def print(*a, **b):
 def get_event_class(packet):
     if packet.update in rare_events: return 'rare'
     if packet.update in shared_events: return 'shared'
-    if packet.update == GameEvent.KILL and packet.kill_count > 3: return 'rare'
+    if packet.kill_count > 3 and (packet.update == GameEvent.KILL or packet.update == GameEvent.HEADSHOT): return 'rare'
     return 'normal'
 
 def small_hash(hash):
