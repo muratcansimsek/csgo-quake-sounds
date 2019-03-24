@@ -286,8 +286,8 @@ class Client:
 						self.sock.shutdown(socket.SHUT_RDWR)
 						break
 
-					if packet_info.length > 2 * 1024 * 1024:
-						# Don't allow files or packets over 2 Mb
+					if packet_info.length > 3 * 1024 * 1024:
+						# Don't allow files or packets over 3 Mb
 						print('%s Received file over 2Mb, disconnecting' % str(self.addr))
 						break
 

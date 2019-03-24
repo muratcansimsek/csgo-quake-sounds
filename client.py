@@ -19,6 +19,8 @@ class Client:
 		self.reconnect_timeout = 1
 		self.shard_code = ''
 
+		# The following are only accessed from the network thread,
+		# and are safe to use without locking.
 		self.download_queue = LifoQueue()
 		self.upload_queue = LifoQueue()
 		self.downloaded = 0
@@ -48,7 +50,26 @@ class Client:
 				return
 			print('Sending %s packet' % PacketInfo.Type.Name(type))
 			self.sock.sendall(header.SerializeToString())
-			self.sock.sendall(raw_packet)
+
+			total_sent = 0
+			while total_sent < header.length:
+				# Give some feedback about sound upload status
+				if header.type == PacketInfo.SOUND_RESPONSE:
+					wx.CallAfter(
+						self.gui.SetStatusText,
+						'Uploading sound {0}/{1}... ({2}%)'.format(
+							self.uploaded + 1,
+							self.upload_total,
+							int(total_sent / header.length * 100)
+						)
+					)
+
+				sent = self.sock.send(raw_packet)
+				if sent == 0:
+					self.connected = False
+					self.sock.shutdown(socket.SHUT_RDWR)
+					return
+				total_sent += sent
 			self.packet_sent = True
 
 	def client_update(self):
@@ -86,8 +107,8 @@ class Client:
 		
 	def file_callback(self, hash, file):
 		sounds.cache[hash] = file
-		wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.loaded_sounds, self.max_sounds))
 		self.loaded_sounds = self.loaded_sounds + 1
+		wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.loaded_sounds, self.max_sounds))
 	
 	def error_callback(self, msg):
 		dialog = wx.GenericMessageDialog(self.gui, message=msg, caption='Sound loading error', style=wx.OK | wx.ICON_ERROR)
@@ -112,45 +133,37 @@ class Client:
 				packet.sound_hash.append(hash)
 		self.send(PacketInfo.SOUNDS_LIST, packet)
 
-	def request_sound(self, hash):
+	def request_sounds(self):
 		if state.is_alive() and not self.gui.downloadWhenAliveChk.Value:
-			self.download_queue.put(hash)
+			return
+		if self.download_queue.empty():
+			if self.download_total != 0:
+				self.update_status()
+				self.download_total = 0
 			return
 
-		wx.CallAfter(self.gui.SetStatusText, 'Downloading sound %d/%d...' % (self.downloaded + 1, self.download_total))
+		hash = self.download_queue.get()
 		packet = SoundRequest()
 		packet.sound_hash.append(hash)
 		self.send(PacketInfo.SOUND_REQUEST, packet)
 		self.downloaded = self.downloaded + 1
 
-		if not state.is_alive() or self.gui.downloadWhenAliveChk.Value:
-			# Still not playing : request more sounds!
-			try:
-				item = self.download_queue.get(block=False)
-				self.request_sound(item)
-			except Empty:
-				pass
-	
-	def respond_sound(self, hash):
+	def respond_sounds(self):
 		if state.is_alive() and not self.gui.uploadWhenAliveChk.Value:
-			self.upload_queue.put(hash)
+			return
+		if self.upload_queue.empty():
+			if self.upload_total != 0:
+				self.update_status()
+				self.upload_total = 0
 			return
 
-		wx.CallAfter(self.gui.SetStatusText, 'Uploading sound %d/%d...' % (self.uploaded + 1, self.upload_total))
+		hash = self.upload_queue.get()
 		with open('cache/' + hash.hex(), 'rb') as infile:
 			packet = SoundResponse()
 			packet.data = infile.read()
 			packet.hash = hash
 			self.send(PacketInfo.SOUND_RESPONSE, packet)
 			self.uploaded = self.uploaded + 1
-
-		if not state.is_alive() or self.gui.uploadWhenAliveChk.Value:
-			# Still not playing : send more sounds!
-			try:
-				item = self.upload_queue.get(block=False)
-				self.respond_sound(item)
-			except Empty:
-				self.update_status()
 
 	def handle(self, packet_type, raw_packet):
 		print('Received %s packet' % PacketInfo.Type.Name(packet_type))
@@ -160,14 +173,14 @@ class Client:
 			packet.ParseFromString(raw_packet)
 			if not sounds.play(packet):
 				self.download_total = self.download_total + 1
-				self.request_sound(packet.sound_hash)
+				self.download_queue.put(packet.sound_hash)
 		elif packet_type == PacketInfo.SOUND_REQUEST:
 			req = SoundRequest()
 			req.ParseFromString(raw_packet)
 
+			self.upload_total += len(req.sound_hash)
 			for hash in req.sound_hash:
-				self.upload_total = self.upload_total + 1
-				self.respond_sound(hash)
+				self.upload_queue.put(hash)
 		elif packet_type == PacketInfo.SOUND_RESPONSE:
 			packet = SoundResponse()
 			packet.ParseFromString(raw_packet)
@@ -176,13 +189,17 @@ class Client:
 		elif packet_type == PacketInfo.SOUNDS_LIST:
 			packet = SoundRequest()
 			packet.ParseFromString(raw_packet)
-			for hash in packet.sound_hash:
-				with sounds.cache_lock:
+
+			download_list = []
+			with sounds.cache_lock:
+				for hash in packet.sound_hash:
 					if hash not in sounds.cache:
-						self.download_total = self.download_total + 1
-						self.request_sound(hash)
+						download_list.append(hash)
+			self.download_total += len(download_list)
+			for hash in download_list:
+				self.download_queue.put(hash)
 		else:
-			print("Unhandle packet type!")
+			print("Unhandled packet type!")
 
 	def try_reconnect(self):
 		"""Tries reconnecting - returns False if disconnected"""
@@ -244,8 +261,8 @@ class Client:
 
 					packet_info = PacketInfo()
 					packet_info.ParseFromString(data)
-					if packet_info.length > 2 * 1024 * 1024:
-						# Don't allow files or packets over 2 Mb
+					if packet_info.length > 3 * 1024 * 1024:
+						# Don't allow files or packets over 3 Mb
 						print('Invalid payload size, reconnecting')
 						self.connected = False
 						self.sock.shutdown(socket.SHUT_RDWR)
@@ -254,6 +271,17 @@ class Client:
 					data = b''
 					received = 0
 					while received < packet_info.length:
+						# Give some feedback about download status
+						if packet_info.type == PacketInfo.SOUND_RESPONSE:
+							wx.CallAfter(
+								self.gui.SetStatusText,
+								'Downloading sound {0}/{1}... ({2}%)'.format(
+									self.downloaded + 1,
+									self.download_total,
+									int(received / packet_info.length * 100)
+								)
+							)
+
 						chunk = self.sock.recv(packet_info.length - received)
 						data += chunk
 						received += len(chunk)
@@ -263,16 +291,8 @@ class Client:
 				self.connected = False
 				self.sock.shutdown(socket.SHUT_RDWR)
 			except socket.timeout:
-				try:
-					item = self.download_queue.get(block=False)
-					self.request_sound(item)
-				except Empty:
-					pass
-				try:
-					item = self.upload_queue.get(block=False)
-					self.respond_sound(item)
-				except Empty:
-					pass
+				self.request_sounds()
+				self.respond_sounds()
 			except socket.error as msg:
 				print("Connection error: " + str(msg))
 				self.connected = False
