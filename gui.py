@@ -44,6 +44,7 @@ class MainFrame(wx.Frame):
 
         self.taskbarIcon = TaskbarIcon(self)
         self.Bind(wx.EVT_ICONIZE, self.OnMinimize)
+        self.Bind(wx.EVT_SHOW, self.OnUnMinimize)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Centre()
         self.Show()
@@ -114,6 +115,15 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_CHECKBOX, lambda e: config.set('Network', 'UploadWhenAlive', self.uploadWhenAliveChk.Value), self.uploadWhenAliveChk)
 
         return settingsBox
+
+    def SetStatusText(self, text):
+        """Override default SetStatusText to avoid minimizing CS:GO"""
+        if self.IsIconized():
+            return
+        super().SetStatusText(text)
+
+    def OnUnMinimize(self, event):
+        client.update_status()
 
     def OnVolumeSlider(self, event):
         config.set('Sounds', 'Volume', self.volumeSlider.Value)
