@@ -50,7 +50,7 @@ class MainFrame(wx.Frame):
     
     def make_volume_zone(self):
         with sounds.cache_lock:
-            self.volumeSlider = wx.Slider(self.panel, value=int(sounds.volume * 100), size=(272, 25))
+            self.volumeSlider = wx.Slider(self.panel, value=sounds.volume, size=(272, 25))
         self.Bind(wx.EVT_SLIDER, self.OnVolumeSlider, self.volumeSlider)
 
         volumeZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Volume")
@@ -118,7 +118,7 @@ class MainFrame(wx.Frame):
     def OnVolumeSlider(self, event):
         config.set('Sounds', 'Volume', self.volumeSlider.Value)
         with sounds.cache_lock:
-            sounds.volume = float(self.volumeSlider.Value) / 100.0
+            sounds.volume = self.volumeSlider.Value
 
     def OpenSoundsDir(self, event):
         # TODO linux

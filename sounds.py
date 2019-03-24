@@ -59,7 +59,7 @@ class SoundManager:
         self.playerid = None
         self.client = None
         with config.lock:
-            self.volume = float(config.config['Sounds'].getint('Volume', 50)) / 100.0
+            self.volume = config.config['Sounds'].getint('Volume', 50)
 
     def init(self, client):
         self.client = client
@@ -120,7 +120,7 @@ class SoundManager:
             if packet.sound_hash in self.cache:
                 print('[+] Playing %s' % small_hash(packet.sound_hash))
                 player = pyglet.media.Player()
-                player.volume = self.volume
+                player.volume = math.pow(self.volume, 2) / 10000
                 player.queue(self.cache[packet.sound_hash])
                 player.play()
                 return True
@@ -131,7 +131,7 @@ class SoundManager:
                     print('[+] Loading and playing %s' % small_hash(packet.sound_hash))
                     self.cache[packet.sound_hash] = pyglet.media.load(filename, streaming=True)
                     player = pyglet.media.Player()
-                    player.volume = self.volume
+                    player.volume = math.pow(self.volume, 2) / 10000
                     player.queue(self.cache[packet.sound_hash])
                     player.play()
                     return True
@@ -151,7 +151,7 @@ class SoundManager:
             if wanted_time + 1000 > datetime.now():
                 return
             player = pyglet.media.Player()
-            player.volume = self.volume
+            player.volume = math.pow(self.volume, 2) / 10000
             player.queue(self.cache[hash])
             player.play()
             print('[+] Playing %s (%f ms late)' % (small_hash(hash), datetime.now() - wanted_time))
