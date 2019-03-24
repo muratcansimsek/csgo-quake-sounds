@@ -291,6 +291,7 @@ class Client:
 				self.connected = False
 				self.sock.shutdown(socket.SHUT_RDWR)
 			except socket.timeout:
+				self.sock.settimeout(None)
 				self.request_sounds()
 				self.respond_sounds()
 			except socket.error as msg:
