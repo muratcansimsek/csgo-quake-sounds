@@ -5,6 +5,7 @@ import os
 import signal
 import socket
 import sys
+from google.protobuf.message import DecodeError
 from threading import Lock, Thread
 
 import config
@@ -298,6 +299,8 @@ class Client:
 						data += chunk
 						received += len(chunk)
 				self.handle(packet_info.type, data)
+			except DecodeError:
+				break
 			except ConnectionResetError:
 				break
 			except socket.error as msg:
