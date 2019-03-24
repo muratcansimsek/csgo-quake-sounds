@@ -5,6 +5,7 @@ import wx.adv
 
 import client
 import config
+from packets_pb2 import GameEvent, PlaySound
 from sounds import sounds
 
 class TaskbarIcon(wx.adv.TaskBarIcon):
@@ -52,7 +53,7 @@ class MainFrame(wx.Frame):
     def make_volume_zone(self):
         with sounds.cache_lock:
             self.volumeSlider = wx.Slider(self.panel, value=sounds.volume, size=(272, 25))
-        self.Bind(wx.EVT_SLIDER, self.OnVolumeSlider, self.volumeSlider)
+        self.Bind(wx.EVT_COMMAND_SCROLL_CHANGED, self.OnVolumeSlider, self.volumeSlider)
 
         volumeZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Volume")
         volumeZone.Add(self.volumeSlider)
@@ -123,12 +124,16 @@ class MainFrame(wx.Frame):
         super().SetStatusText(text)
 
     def OnUnMinimize(self, event):
-        client.update_status()
+        threading.Thread(target=self.client.update_status, daemon=True).start()
 
     def OnVolumeSlider(self, event):
         config.set('Sounds', 'Volume', self.volumeSlider.Value)
         with sounds.cache_lock:
             sounds.volume = self.volumeSlider.Value
+            playpacket = PlaySound()
+            playpacket.steamid = 0
+            playpacket.sound_hash = sounds.get_random(GameEvent.HEADSHOT, None)
+        sounds.play(playpacket)
 
     def OpenSoundsDir(self, event):
         # TODO linux

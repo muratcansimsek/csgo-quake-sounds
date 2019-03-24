@@ -14,6 +14,7 @@ from util import print
 class Client:
 	def __init__(self):
 		self.sock_lock = Lock()
+		self.sock = None
 		self.connected = False
 		self.packet_sent = True
 		self.reconnect_timeout = 1
@@ -214,7 +215,8 @@ class Client:
 					self.reconnect_timeout = 1
 				except ConnectionRefusedError:
 					self.connected = False
-					self.sock.shutdown(socket.SHUT_RDWR)
+					if self.sock is not None:
+						self.sock.shutdown(socket.SHUT_RDWR)
 
 					sleep(self.reconnect_timeout)
 					self.reconnect_timeout *= 2
