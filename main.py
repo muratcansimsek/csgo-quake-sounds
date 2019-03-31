@@ -16,11 +16,24 @@ def get_steam_path():
 
 # TODO linux
 def get_csgo_path(steamapps_folder):
-	appmanifest = steamapps_folder + "\\appmanifest_730.acf"
-	with open(appmanifest, "r") as f:
-		data = acf.load(f)
-	return steamapps_folder + "\\common\\" + data["AppState"]["installdir"]
+	# Get every SteamLibrary folder
+	libraryfolders = acf.load(steamapps_folder + '\\libraryfolders.vdf')
+	folders = [steamapps_folder]
+	i = 1
+	while True:
+		try:
+			folders.append(libraryfolders[str(i)] + '\\steamapps')
+		except:
+			break
+		i++
 
+	# Find the one CS:GO is in
+	for folder in folders:
+		try:
+			appmanifest = acf.load(folder + '\\appmanifest_730.acf')
+			return folder + "\\common\\" + appmanifest["AppState"]["installdir"]
+		except:
+			continue
 
 def main():
 	# Ensure gamestate integration cfg is in csgo's cfg directory
