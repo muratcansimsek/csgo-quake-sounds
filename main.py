@@ -17,7 +17,8 @@ def get_steam_path():
 # TODO linux
 def get_csgo_path(steamapps_folder):
 	# Get every SteamLibrary folder
-	libraryfolders = acf.load(steamapps_folder + '\\libraryfolders.vdf')
+	with open(steamapps_folder + '\\libraryfolders.vdf') as infile:
+		libraryfolders = acf.load(infile)
 	folders = [steamapps_folder]
 	i = 1
 	while True:
@@ -25,12 +26,13 @@ def get_csgo_path(steamapps_folder):
 			folders.append(libraryfolders[str(i)] + '\\steamapps')
 		except:
 			break
-		i++
+		i = i + 1
 
 	# Find the one CS:GO is in
 	for folder in folders:
 		try:
-			appmanifest = acf.load(folder + '\\appmanifest_730.acf')
+			with open(folder + '\\appmanifest_730.acf') as infile:
+				appmanifest = acf.load(infile)
 			return folder + "\\common\\" + appmanifest["AppState"]["installdir"]
 		except:
 			continue
