@@ -15,11 +15,45 @@ from packets_pb2 import PacketInfo, GameEvent, SoundRequest, SoundResponse, Clie
 CLIENT_TIMEOUT = 20
 MAX_CLIENTS = 100
 
+
+# https://stackoverflow.com/questions/5327614/logging-lock-acquire-and-release-calls-in-multi-threaded-application
+import logging
+logging.basicConfig(level=logging.DEBUG)
+log = logging.getLogger('main')
+class LogLock(object):
+    def __init__(self, name):
+        self.name = str(name)
+        self.lock = Lock()
+
+    def acquire(self, blocking=True):
+        log.debug("{0:x} Trying to acquire {1} lock".format(
+            id(self), self.name))
+        ret = self.lock.acquire(blocking)
+        if ret == True:
+            log.debug("{0:x} Acquired {1} lock".format(
+                id(self), self.name))
+        else:
+            log.debug("{0:x} Non-blocking aquire of {1} lock failed".format(
+                id(self), self.name))
+        return ret
+
+    def release(self):
+        log.debug("{0:x} Releasing {1} lock".format(id(self), self.name))
+        self.lock.release()
+
+    def __enter__(self):
+        self.acquire()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()
+        return False    # Do not swallow exceptions
+
+
 class Shard:
 	def __init__(self, name):
 		self.name = name
 		self.clients = []
-		self.lock = Lock()
+		self.lock = LogLock("shard " + str(name))
 		self.round = 0
 		self.round_events = []
 
@@ -69,7 +103,7 @@ class Shard:
 class Client:
 	def __init__(self, server, sock, addr):
 		self.server = server
-		self.lock = Lock()
+		self.lock = LogLock("client " + str(addr))
 		self.sock = sock
 		self.addr = addr
 		self.steamid = 0
@@ -110,8 +144,7 @@ class Client:
 		if len(sound_request.sound_hash) == 0:
 			return
 
-		with self.lock:
-			print('%s Requesting %d/%d sounds' % (str(self.addr), len(sound_request.sound_hash), len(hashes)))
+		print('%s Requesting %d/%d sounds' % (str(self.addr), len(sound_request.sound_hash), len(hashes)))
 		self.send(PacketInfo.SOUND_REQUEST, sound_request)
 
 	def handle_event(self, packet):
@@ -158,8 +191,7 @@ class Client:
 		with self.server.cache_lock:
 			if packet.hash in self.server.cache:
 				# Sound already saved
-				with self.lock:
-					print('%s sent %s but we already have it. Ignoring.' % (str(self.addr), small_hash(packet.hash)))
+				print('%s sent %s but we already have it. Ignoring.' % (str(self.addr), small_hash(packet.hash)))
 				return
 		with open('cache/' + packet.hash.hex(), 'wb') as outfile:
 			outfile.write(packet.data)
@@ -272,32 +304,32 @@ class Client:
 
 		while self.server.running:
 			try:
-				with self.lock:
-					data = self.sock.recv(7)
-					if len(data) == 0:
-						break
+				data = self.sock.recv(7)
+				if len(data) == 0:
+					break
 
-					packet_info = PacketInfo()
-					packet_info.ParseFromString(data)
-					try:
-						packet_type = PacketInfo.Type.Name(packet_info.type)
-						print('%s Received %s packet' % (str(self.addr), packet_type))
-					except:
-						print('%s Received invalid packet type, disconnecting' % str(self.addr))
+				packet_info = PacketInfo()
+				packet_info.ParseFromString(data)
+				try:
+					packet_type = PacketInfo.Type.Name(packet_info.type)
+					print('%s Received %s packet' % (str(self.addr), packet_type))
+				except:
+					print('%s Received invalid packet type, disconnecting' % str(self.addr))
+					with self.lock:
 						self.sock.shutdown(socket.SHUT_RDWR)
-						break
+					break
 
-					if packet_info.length > 3 * 1024 * 1024:
-						# Don't allow files or packets over 3 Mb
-						print('%s Received file over 2Mb, disconnecting' % str(self.addr))
-						break
+				if packet_info.length > 3 * 1024 * 1024:
+					# Don't allow files or packets over 3 Mb
+					print('%s Received file over 2Mb, disconnecting' % str(self.addr))
+					break
 
-					data = b''
-					received = 0
-					while received < packet_info.length:
-						chunk = self.sock.recv(packet_info.length - received)
-						data += chunk
-						received += len(chunk)
+				data = b''
+				received = 0
+				while received < packet_info.length:
+					chunk = self.sock.recv(packet_info.length - received)
+					data += chunk
+					received += len(chunk)
 				self.handle(packet_info.type, data)
 			except DecodeError:
 				break
@@ -320,17 +352,17 @@ class Server:
 	def __init__(self):
 		self.running = True
 		self.init_sound_cache()
-		self.clients_lock = Lock()
+		self.clients_lock = LogLock("server clients")
 		self.clients = []
 
-		self.shards_lock = Lock()
+		self.shards_lock = LogLock("server shards")
 		self.shards = {}
 
 	def shutdown(self, signum, frame):
 		self.running = False
 
 	def init_sound_cache(self):
-		self.cache_lock = Lock()
+		self.cache_lock = LogLock("server cache")
 		self.cache = []
 
 		for filename in os.listdir('cache'):
