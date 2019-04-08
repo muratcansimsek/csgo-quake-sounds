@@ -37,7 +37,7 @@ def get_csgo_path(steamapps_folder):
 				appmanifest = acf.load(infile)
 			print('Valid installdir found: %s' % (folder + "\\common\\" + appmanifest["AppState"]["installdir"]))
 			return folder + "\\common\\" + appmanifest["AppState"]["installdir"]
-		except KeyError:
+		except FileNotFoundError:
 			continue
 
 	print('CS:GO not found :/')
