@@ -11,6 +11,7 @@ import config
 from packets_pb2 import GameEvent, PacketInfo, PlaySound
 from util import print, get_event_class, small_hash
 
+
 class SampleCollection:
     """Represents a sample collection (e.g. Double kill, Headshot, etc)"""
     def __init__(self, path):
@@ -29,7 +30,8 @@ class SampleCollection:
             with open(filename, 'rb') as infile:
                 hash.update(infile.read())
                 digest = hash.digest()
-                with open('cache/' + hash.hexdigest(), 'wb') as outfile:
+                filepath = os.path.join('cache', hash.hexdigest())
+                with open(filepath, 'wb') as outfile:
                     infile.seek(0)
                     outfile.write(infile.read())
             try:
@@ -69,16 +71,16 @@ class SoundManager:
         """Reloads all sounds from the sounds/ folder"""
         with self.cache_lock:
             for path in os.listdir('sounds'):
-                complete_path = 'sounds/' + path
+                complete_path = os.path.join('sounds', path)
                 if not os.path.isfile(complete_path):
                     self.collections[path] = SampleCollection(complete_path)
                     self.collections[path].load(self.sound_list(complete_path), one_sound_loaded_callback, error_callback)
-        
+
     def sound_list(self, sounds_dir):
         """Returns the list of sounds in a directory and its subdirectories"""
         list = []
         for path in os.listdir(sounds_dir):
-            complete_path = sounds_dir + '/' + path
+            complete_path = os.path.join(sounds_dir, path)
 
             # Ignore .gitkeep, .gitignore, etc
             if path.startswith('.git'):
@@ -109,7 +111,7 @@ class SoundManager:
         elif type == GameEvent.COLLATERAL: sound = 'Collateral'
         elif type == GameEvent.ROUND_START: sound = 'Round start'
         elif type == GameEvent.TIMEOUT: sound = 'Timeout'
-        
+
         return self.collections[sound].get_random_hash()
 
     def play(self, packet):
@@ -126,7 +128,7 @@ class SoundManager:
                 player.play()
                 return True
             else:
-                filename = 'cache/' + packet.sound_hash.hex()
+                filename = os.path.join('cache', packet.sound_hash.hex())
                 if os.path.isfile(filename):
                     # Sound is downloaded but not loaded
                     print('[+] Loading and playing %s' % small_hash(packet.sound_hash))
@@ -156,12 +158,13 @@ class SoundManager:
             player.queue(self.cache[hash])
             player.play()
             print('[+] Playing %s (%f ms late)' % (small_hash(hash), datetime.now() - wanted_time))
-    
+
     def save(self, packet):
-        with open('cache/' + packet.hash.hex(), 'wb') as outfile:
+        filepath = os.path.join('cache', packet.hash.hex())
+        with open(filepath, 'wb') as outfile:
             outfile.write(packet.data)
         try:
-            file = pyglet.media.load('cache/' + packet.hash.hex(), streaming=True)
+            file = pyglet.media.load(filepath, streaming=True)
             print('Saved %s' % small_hash(packet.hash))
         except Exception as e:
             print(" ! Failed to load \"" + small_hash(packet.hash) + "\": " + str(e))
@@ -173,9 +176,14 @@ class SoundManager:
         """Sends a sound to play for everybody"""
         if self.client == None:
             return
-        
+
         hash = self.get_random(update_type, state)
         if hash != None:
+            if hash == b'':
+                print('?????????????????????????????')
+                print('Update type: %s' % str(update_type))
+                print('?????????????????????????????')
+
             packet = GameEvent()
             packet.update = update_type
             packet.proposed_sound_hash = hash
@@ -189,6 +197,6 @@ class SoundManager:
                 self.play(playpacket)
 
             self.client.send(PacketInfo.GAME_EVENT, packet)
-                
+
 
 sounds = SoundManager()

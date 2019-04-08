@@ -1,7 +1,8 @@
+import os
 import socket
 import wx
 from http.server import HTTPServer
-from queue import Empty, LifoQueue
+from queue import LifoQueue
 from time import sleep
 from threading import Thread, Lock
 
@@ -164,7 +165,8 @@ class Client:
 			return
 
 		hash = self.upload_queue.get()
-		with open('cache/' + hash.hex(), 'rb') as infile:
+		filepath = os.path.join('cache', hash.hex())
+		with open(filepath, 'rb') as infile:
 			packet = SoundResponse()
 			packet.data = infile.read()
 			packet.hash = hash

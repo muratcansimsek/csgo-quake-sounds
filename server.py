@@ -136,6 +136,8 @@ class Client:
 		sound_request = SoundRequest()
 		with self.server.cache_lock:
 			for hash in hashes:
+				if len(hash) != 128:
+					print('no %s' % str(hash))
 				with self.lock:
 					if hash not in self.sounds:
 						self.sounds.append(hash)
@@ -152,6 +154,10 @@ class Client:
 			self.round = packet.round
 
 		event_class = get_event_class(packet)
+		if len(packet.proposed_sound_hash) != 128:
+			print('This is not okay: %s' % str(packet))
+			print('Serialized: %s' % str(packet.SerializeToString()))
+
 		self.check_or_request_sounds([packet.proposed_sound_hash])
 
 		with self.lock:
