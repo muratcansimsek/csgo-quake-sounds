@@ -50,7 +50,12 @@ class Client:
 			if not self.connected:
 				return
 			print('Sending %s packet' % PacketInfo.Type.Name(type))
-			self.sock.sendall(header.SerializeToString())
+			try:
+				self.sock.sendall(header.SerializeToString())
+			except:
+				self.connected = False
+				self.sock.shutdown(socket.SHUT_RDWR)
+				return
 
 			total_sent = 0
 			while total_sent < header.length:
