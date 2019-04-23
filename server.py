@@ -16,44 +16,11 @@ CLIENT_TIMEOUT = 20
 MAX_CLIENTS = 100
 
 
-# https://stackoverflow.com/questions/5327614/logging-lock-acquire-and-release-calls-in-multi-threaded-application
-import logging
-logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger('main')
-class LogLock(object):
-    def __init__(self, name):
-        self.name = str(name)
-        self.lock = Lock()
-
-    def acquire(self, blocking=True):
-        log.debug("{0:x} Trying to acquire {1} lock".format(
-            id(self), self.name))
-        ret = self.lock.acquire(blocking)
-        if ret == True:
-            log.debug("{0:x} Acquired {1} lock".format(
-                id(self), self.name))
-        else:
-            log.debug("{0:x} Non-blocking aquire of {1} lock failed".format(
-                id(self), self.name))
-        return ret
-
-    def release(self):
-        log.debug("{0:x} Releasing {1} lock".format(id(self), self.name))
-        self.lock.release()
-
-    def __enter__(self):
-        self.acquire()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.release()
-        return False    # Do not swallow exceptions
-
-
 class Shard:
 	def __init__(self, name):
 		self.name = name
 		self.clients = []
-		self.lock = LogLock("shard " + str(name))
+		self.lock = Lock()
 		self.round = 0
 		self.round_events = []
 
@@ -103,7 +70,7 @@ class Shard:
 class Client:
 	def __init__(self, server, sock, addr):
 		self.server = server
-		self.lock = LogLock("client " + str(addr))
+		self.lock = Lock()
 		self.sock = sock
 		self.addr = addr
 		self.steamid = 0
@@ -359,17 +326,17 @@ class Server:
 	def __init__(self):
 		self.running = True
 		self.init_sound_cache()
-		self.clients_lock = LogLock("server clients")
+		self.clients_lock = Lock()
 		self.clients = []
 
-		self.shards_lock = LogLock("server shards")
+		self.shards_lock = Lock()
 		self.shards = {}
 
 	def shutdown(self, signum, frame):
 		self.running = False
 
 	def init_sound_cache(self):
-		self.cache_lock = LogLock("server cache")
+		self.cache_lock = Lock()
 		self.cache = []
 
 		for filename in os.listdir('cache'):
