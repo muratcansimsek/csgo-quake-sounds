@@ -76,6 +76,16 @@ class SoundManager:
                     self.collections[path] = SampleCollection(complete_path)
                     self.collections[path].load(self.sound_list(complete_path), one_sound_loaded_callback, error_callback)
 
+            # Play sound once all sounds are loaded
+            # This also prevents windows from minimizing the game when the first sound is played
+            playpacket = PlaySound()
+            playpacket.steamid = 0
+            hash = self.get_random(GameEvent.ROUND_START, None)
+            if hash is None:
+                hash = self.get_random(GameEvent.HEADSHOT, None)
+            playpacket.sound_hash = hash
+        self.play(playpacket)
+
     def sound_list(self, sounds_dir):
         """Returns the list of sounds in a directory and its subdirectories"""
         list = []
