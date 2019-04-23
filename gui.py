@@ -129,6 +129,9 @@ class MainFrame(wx.Frame):
     def OnVolumeSlider(self, event):
         config.set('Sounds', 'Volume', self.volumeSlider.Value)
         with sounds.cache_lock:
+            # Volume didn't change
+            if sounds.volume == self.volumeSlider.Value:
+                return
             sounds.volume = self.volumeSlider.Value
             playpacket = PlaySound()
             playpacket.steamid = 0
