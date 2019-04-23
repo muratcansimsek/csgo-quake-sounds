@@ -197,7 +197,9 @@ class SoundManager:
             packet = GameEvent()
             packet.update = update_type
             packet.proposed_sound_hash = hash
-            packet.kill_count = state.round_kills
+            packet.kill_count = int(state.round_kills)
+            packet.round = int(state.current_round)
+            self.client.send(PacketInfo.GAME_EVENT, packet)
 
             # Normal event : play without waiting for server
             if get_event_class(packet) == 'normal':
@@ -205,8 +207,6 @@ class SoundManager:
                 playpacket.steamid = 0
                 playpacket.sound_hash = hash
                 self.play(playpacket)
-
-            self.client.send(PacketInfo.GAME_EVENT, packet)
 
 
 sounds = SoundManager()

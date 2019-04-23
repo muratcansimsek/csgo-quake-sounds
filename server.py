@@ -247,7 +247,8 @@ class Client:
 				for hash in new_shard.sounds:
 					if hash not in self.sounds:
 						packet.sound_hash.append(hash)
-		self.send(PacketInfo.SOUNDS_LIST, packet)
+		if len(packet.sound_hash) > 0:
+			self.send(PacketInfo.SOUNDS_LIST, packet)
 
 	def leave_shard(self):
 		"""Leave the shard the Client is in - DOES NOT LOCK"""
