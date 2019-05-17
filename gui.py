@@ -7,6 +7,8 @@ import client
 import config
 from packets_pb2 import GameEvent, PlaySound
 from sounds import sounds
+from threadripper import threadripper
+
 
 class TaskbarIcon(wx.adv.TaskBarIcon):
     def __init__(self, frame):
@@ -39,8 +41,7 @@ class MainFrame(wx.Frame):
         self.SetStatusText("Loading sounds...")
 
         # Start threads
-        self.client = client.Client()
-        self.client.init(self)
+        self.client = client.Client(self, threadripper)
         self.UpdateSounds(None)
 
         self.taskbarIcon = TaskbarIcon(self)

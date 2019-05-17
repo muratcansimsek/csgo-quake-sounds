@@ -1,11 +1,12 @@
 """Related to CSGO Gamestate"""
 import json
-from threading import Lock
-from http.server import BaseHTTPRequestHandler
+from threading import Lock, Thread
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import config
 from sounds import sounds
 from packets_pb2 import GameEvent
+
 
 class PlayerState:
     def __init__(self, json):
@@ -179,13 +180,11 @@ class PlayerState:
 class CSGOState:
     """Follows the CSGO state via gamestate integration"""
 
-    def __init__(self):
+    def __init__(self, client):
         self.lock = Lock()
         self.old_state = None
-        self.client = None
-    
-    def init(self, client):
         self.client = client
+        Thread(target=HTTPServer(('127.0.0.1', 3000), PostHandler).serve_forever, daemon=True).start()
     
     def is_alive(self):
         with self.lock:
@@ -213,17 +212,20 @@ class CSGOState:
             if should_update_client:
                 self.client.client_update()
 
+
 class PostHandler(BaseHTTPRequestHandler):
+    def __init__(self, *args, state):
+        super().__init__(*args)
+        self.state = state
+
     def do_POST(self):
         content_len = int(self.headers['Content-Length'])
         body = self.rfile.read(content_len)
         self.send_response(200)
         self.end_headers()
-        state.update(json.loads(body))
+        self.state.update(json.loads(body))
         return
     
     def log_message(self, format, *args):
         # Do not spam the console with POSTs
         return
-
-state = CSGOState()

@@ -1,7 +1,6 @@
 import os
 import socket
 import wx
-from http.server import HTTPServer
 from queue import Empty
 from time import sleep
 from threading import Thread
@@ -9,31 +8,27 @@ from threading import Thread
 import config
 from packets_pb2 import PacketInfo, PlaySound, SoundRequest, SoundResponse, ClientUpdate
 from sounds import sounds
-from state import state, PostHandler
+from state import CSGOState
 from util import print
-from threadripper import threadripper
 
 
 class Client:
-	def __init__(self):
+	def __init__(self, gui, global_mutex):
 		self.sock = None
 		self.connected = False
 		self.reconnect_timeout = 1
 		self.shard_code = ''
+		self.threadripper = global_mutex
+		self.gui = gui
+		self.shard_code = gui.shardCodeIpt.GetValue()
 
 		self.downloaded = 0
 		self.download_total = 0
 		self.uploaded = 0
 		self.upload_total = 0
 
-	def init(self, gui):
-		"""Non-blocking init"""
-		self.gui = gui
-		self.shard_code = gui.shardCodeIpt.GetValue()
 		sounds.init(self)
-		state.init(self)
-		gamestate_server = HTTPServer(('127.0.0.1', 3000), PostHandler)
-		Thread(target=gamestate_server.serve_forever, daemon=True).start()
+		self.state = CSGOState(self)
 		Thread(target=self.listen, daemon=True).start()
 		Thread(target=self.keepalive, daemon=True).start()
 
@@ -45,20 +40,20 @@ class Client:
 		header.length = len(raw_packet)
 
 		# ...And off it goes
-		threadripper.packets_to_send.put([header, raw_packet])
+		self.threadripper.packets_to_send.put([header, raw_packet])
 
 	def client_update(self):
 		"""Thread-safe: Send a packet informing the server of our current state."""
 		packet = ClientUpdate()
-		with state.lock:
-			if state.old_state == None or not state.old_state.is_ingame:
+		with self.state.lock:
+			if self.state.old_state == None or not state.old_state.is_ingame:
 				packet.status = ClientUpdate.UNCONNECTED
 				packet.map = b''
 				packet.steamid = 0
 			else:
 				packet.status = ClientUpdate.CONNECTED
 				packet.map = b''
-				packet.steamid = int(state.old_state.steamid)
+				packet.steamid = int(self.state.old_state.steamid)
 
 		packet.shard_code = self.shard_code.encode('utf-8')
 		self.send(PacketInfo.CLIENT_UPDATE, packet)
@@ -67,16 +62,19 @@ class Client:
 		if not self.connected:
 			wx.CallAfter(self.gui.SetStatusText, 'Connecting to sound sync server...')
 			return
-		with state.lock:
-			if state.old_state == None:
+		with self.state.lock:
+			if self.state.old_state == None:
 				wx.CallAfter(self.gui.SetStatusText, 'Waiting for CS:GO...')
-			elif state.old_state.is_ingame:
-				phase = state.old_state.phase
+			elif self.state.old_state.is_ingame:
+				phase = self.state.old_state.phase
 				if phase == 'unknown':
 					phase = ''
 				else:
 					phase = ' (%s)' % phase
-				wx.CallAfter(self.gui.SetStatusText, 'Room "%s" - Round %s%s' % (self.shard_code, state.old_state.current_round, phase))
+				wx.CallAfter(
+					self.gui.SetStatusText,
+					f'Room "{self.shard_code}" - Round {self.state.old_state.current_round}{phase}'
+				)
 			else:
 				wx.CallAfter(self.gui.SetStatusText, 'Room "%s" - Not in a match.' % self.shard_code)
 		
@@ -86,7 +84,9 @@ class Client:
 		wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.loaded_sounds, self.max_sounds))
 	
 	def error_callback(self, msg):
-		dialog = wx.GenericMessageDialog(self.gui, message=msg, caption='Sound loading error', style=wx.OK | wx.ICON_ERROR)
+		dialog = wx.GenericMessageDialog(
+			self.gui, message=msg, caption='Sound loading error', style=wx.OK | wx.ICON_ERROR
+		)
 		wx.CallAfter(dialog.ShowModal)
 	
 	def reload_sounds(self):
@@ -108,11 +108,11 @@ class Client:
 		self.send(PacketInfo.SOUNDS_LIST, packet)
 
 	def request_sounds(self):
-		if state.is_alive() and not self.gui.downloadWhenAliveChk.Value:
+		if self.state.is_alive() and not self.gui.downloadWhenAliveChk.Value:
 			return
 
 		try:
-			hash = threadripper.sounds_to_download.get(block=False)
+			hash = self.threadripper.sounds_to_download.get(block=False)
 			packet = SoundRequest()
 			packet.sound_hash.append(hash)
 			self.send(PacketInfo.SOUND_REQUEST, packet)
@@ -122,11 +122,11 @@ class Client:
 				self.download_total = 0
 
 	def respond_sounds(self):
-		if state.is_alive() and not self.gui.uploadWhenAliveChk.Value:
+		if self.state.is_alive() and not self.gui.uploadWhenAliveChk.Value:
 			return
 
 		try:
-			hash = threadripper.sounds_to_upload.get(block=False)
+			hash = self.threadripper.sounds_to_upload.get(block=False)
 			filepath = os.path.join('cache', hash.hex())
 			with open(filepath, 'rb') as infile:
 				packet = SoundResponse()
@@ -146,14 +146,14 @@ class Client:
 			packet.ParseFromString(raw_packet)
 			if not sounds.play(packet):
 				self.download_total = self.download_total + 1
-				threadripper.sounds_to_download.put(packet.sound_hash)
+				self.threadripper.sounds_to_download.put(packet.sound_hash)
 		elif packet_type == PacketInfo.SOUND_REQUEST:
 			req = SoundRequest()
 			req.ParseFromString(raw_packet)
 
 			self.upload_total += len(req.sound_hash)
 			for hash in req.sound_hash:
-				threadripper.sounds_to_upload.put(hash)
+				self.threadripper.sounds_to_upload.put(hash)
 		elif packet_type == PacketInfo.SOUND_RESPONSE:
 			packet = SoundResponse()
 			packet.ParseFromString(raw_packet)
@@ -170,7 +170,7 @@ class Client:
 						download_list.append(hash)
 			self.download_total += len(download_list)
 			for hash in download_list:
-				threadripper.sounds_to_download.put(hash)
+				self.threadripper.sounds_to_download.put(hash)
 		else:
 			print("Unhandled packet type!")
 
@@ -208,7 +208,7 @@ class Client:
 				self.request_sounds()
 				self.respond_sounds()
 				try:
-					header, raw_packet = threadripper.packets_to_send.get(block=False)
+					header, raw_packet = self.threadripper.packets_to_send.get(block=False)
 					print(f'Sending {PacketInfo.Type.Name(header.type)}')
 					self.sock.sendall(header.SerializeToString())
 
