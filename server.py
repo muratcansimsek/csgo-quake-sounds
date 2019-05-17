@@ -28,6 +28,9 @@ class Shard:
 		# Every sound in this list will be downloaded by users that join the shard
 		self.sounds = []
 
+	def __str__(self):
+		return f'[{self.name} ({len(self.clients)})]'
+
 	def play(self, steamid, hash):
 		packet = PlaySound()
 		packet.steamid = steamid
@@ -39,20 +42,22 @@ class Shard:
 		header.length = len(raw_packet)
 		raw_header = header.SerializeToString()
 
-		print('Playing %s for steamid %d in shard %s (%d clients)' % (small_hash(hash), steamid, self.name, len(self.clients)))
+		print(f'{str(self)} Playing {small_hash(hash)} for {steamid}')
 
 		with self.lock:
 			for client in self.clients:
 				with client.lock:
 					if client.ingame and client.steamid != steamid:
-						print('%s Should play sound %s if spectating %d' % (str(client.addr), small_hash(hash), steamid))
+						print(f'{str(self)} Playing {small_hash(hash)} @ {str(client.addr)}')
 						client.sock.sendall(raw_header)
 						client.sock.sendall(raw_packet)
 
 					if client.round > self.round or client.round < self.round - 1:
 						self.round = client.round
 						self.round_events = []
-	
+
+		print(f'Done playing {small_hash(hash)}')
+
 	def play_shared(self, event, hash):
 		should_play = False
 		with self.lock:
@@ -85,19 +90,19 @@ class Client:
 		self.map = ''
 		self.round = 0
 		self.ingame = False
-		
+
 		self.sock.settimeout(CLIENT_TIMEOUT)
-	
+
 	def send(self, type, packet):
 		raw_packet = packet.SerializeToString()
 		header = PacketInfo()
 		header.type = type
 		header.length = len(raw_packet)
 		with self.lock:
-			print('%s Sending %s packet' % (str(self.addr), PacketInfo.Type.Name(type)))
+			print(f'Sending {PacketInfo.Type.Name(type)} to {str(self.addr)}')
 			self.sock.sendall(header.SerializeToString())
 			self.sock.sendall(raw_packet)
-	
+
 	def check_or_request_sounds(self, hashes):
 		"""Request sound if we don't have it in cache"""
 		sound_request = SoundRequest()
@@ -110,11 +115,12 @@ class Client:
 						self.sounds.append(hash)
 				if hash not in self.server.cache:
 					sound_request.sound_hash.append(hash)
-		if len(sound_request.sound_hash) == 0:
-			return
 
-		print('%s Requesting %d/%d sounds' % (str(self.addr), len(sound_request.sound_hash), len(hashes)))
-		self.send(PacketInfo.SOUND_REQUEST, sound_request)
+		if len(sound_request.sound_hash) > 0:
+			print(f"Missing {len(sound_request.sound_hash)} sounds in cache, asking {str(self.addr)} for them")
+			self.send(PacketInfo.SOUND_REQUEST, sound_request)
+		elif len(hashes) > 1:
+			print(f"We already have all of {str(self.addr)}'s sounds")
 
 	def handle_event(self, packet):
 		with self.lock:
@@ -136,22 +142,22 @@ class Client:
 			shard.play_shared(packet.update, packet.proposed_sound_hash)
 		else:
 			shard.play(steamid if event_class == 'normal' else 0, packet.proposed_sound_hash)
-	
+
 	def send_sound(self, packet):
 		"""Handles a SoundRequest packet - LOCKS"""
 		with self.server.cache_lock:
 			if not packet.sound_hash in self.server.cache:
 				return
-		
+
 		res = SoundResponse()
 		with open('cache/' + packet.sound_hash.hex(), 'rb') as infile:
 			res.data = infile.read()
 			res.hash = packet.sound_hash
 
-		with self.lock:
-			print('Sending %s to %d' % (small_hash(packet.sound_hash), self.steamid))
+		print(f'{self.steamid} is downloading {small_hash(packet.sound_hash)}')
 		self.send(PacketInfo.SOUND_RESPONSE, res)
-	
+		print(f'{self.steamid} is done downloading {small_hash(packet.sound_hash)}')
+
 	def save_sound(self, packet):
 		"""Handles a SoundResponse packet - LOCKS"""
 		verif = hashlib.blake2b()
@@ -171,7 +177,7 @@ class Client:
 		with self.server.cache_lock:
 			self.server.cache.append(packet.hash)
 		with self.lock:
-			print('%s Saved %s' % (str(self.addr), small_hash(packet.hash)))
+			print(f'Saved {small_hash(packet.hash)} from {str(self.addr)}')
 			self.sounds.append(packet.hash)
 			shard = self.shard
 		if shard != None:
@@ -181,6 +187,7 @@ class Client:
 			# Add hash to shard sound list and notify clients
 			with shard.lock:
 				shard.sounds.append(packet.hash)
+				print(f'Notifying {str(shard)} of the new sound {small_hash(packet.hash)}')
 				for client in shard.clients:
 					should_send = False
 					with client.lock:
@@ -208,7 +215,7 @@ class Client:
 					for hash in self.sounds:
 						if hash in self.server.cache and hash not in new_shard.sounds:
 							new_shard.sounds.append(hash)
-				
+
 				# Send missing sounds list (as in the client doesn't have them) to client
 				packet = SoundRequest()
 				for hash in new_shard.sounds:
@@ -285,8 +292,9 @@ class Client:
 				packet_info = PacketInfo()
 				packet_info.ParseFromString(data)
 				try:
-					packet_type = PacketInfo.Type.Name(packet_info.type)
-					print('%s Received %s packet' % (str(self.addr), packet_type))
+					if packet_info.type != PacketInfo.CLIENT_UPDATE:
+						packet_type = PacketInfo.Type.Name(packet_info.type)
+						print('%s Received %s ' % (str(self.addr), packet_type))
 				except:
 					print('%s Received invalid packet type, disconnecting' % str(self.addr))
 					with self.lock:
