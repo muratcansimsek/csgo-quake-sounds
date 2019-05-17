@@ -1,2 +1,5 @@
+- Fix adjusting volume before sounds are loaded
+- Make release executable
+
 Bonus:
 - Encrypted connection
