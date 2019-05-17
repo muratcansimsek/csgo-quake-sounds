@@ -1,5 +1,5 @@
-- Fix adjusting volume before sounds are loaded
 - Make release executable
+- Make basic unit tests
 
 Bonus:
 - Encrypted connection

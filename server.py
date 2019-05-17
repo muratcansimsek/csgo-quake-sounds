@@ -87,7 +87,6 @@ class Client:
 		# The sounds may not be cached by the server
 		self.sounds = []
 
-		self.map = ''
 		self.round = 0
 		self.ingame = False
 
@@ -241,7 +240,6 @@ class Client:
 	def update(self, packet):
 		with self.lock:
 			self.ingame = packet.status == ClientUpdate.CONNECTED
-			self.map = packet.map
 			self.steamid = packet.steamid
 
 			if self.shard == None and packet.shard_code == b'':

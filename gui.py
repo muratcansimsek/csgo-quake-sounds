@@ -58,10 +58,7 @@ class MainFrame(wx.Frame):
         volumeZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Volume")
         volumeZone.Add(self.volumeSlider)
         return volumeZone
-    
-    # TODO
-    # It isn't very clear that this is REQUIRED for sounds to work
-    # Also, "Friends code" doesn't look important when you play solo
+
     def make_friends_zone(self):
         shardCodeBtn = wx.Button(self.panel, label="Join room")
         self.Bind(wx.EVT_BUTTON, self.UpdateShardCode, shardCodeBtn)
