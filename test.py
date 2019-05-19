@@ -9,6 +9,7 @@ import server
 from config import config
 from client import Client
 from packets_pb2 import GameEvent
+from state import CSGOState
 from threadripper import Threadripper
 
 
@@ -24,6 +25,26 @@ class DummyGui:
 		pass
 
 
+class PlayerState:
+	is_ingame = True
+	phase = 'live'
+	current_round = 1
+
+	def __init__(self, steamid):
+		self.steamid = steamid
+		self.playerid = steamid
+
+
+class MockState(CSGOState):
+	current_round = 1
+	round_kills = 3
+
+	def __init__(self, client, steamid):
+		self.lock = threading.Lock()
+		self.old_state = PlayerState(steamid)
+		self.client = client
+
+
 class MockClient(Client):
 	"""Simpler client for testing."""
 
@@ -33,15 +54,10 @@ class MockClient(Client):
 		self.shard_code = 'shard_code'
 		self.sounds = sounds.SoundManager(self)
 
-		# Load sounds silently
+		# Mock stuff
 		self.sounds.play = Mock()
+		self.state = MockState(self, steamid)
 
-		self.state = Mock(
-			current_round=1,
-			round_kills=3,
-			lock=threading.Lock(),
-			old_state=Mock(steamid=steamid)
-		)
 		threading.Thread(target=self.listen, daemon=True).start()
 
 		# Wait for server connection before reloading sounds
@@ -72,10 +88,13 @@ class TestClient(unittest.TestCase):
 	def test_receive_sound(self, *args):
 		alice = MockClient('123123123')
 		self.assertEqual(alice.sounds.play.call_count, 1)
+		sleep(0.5)
 		bob = MockClient('456456456')
 		self.assertEqual(bob.sounds.play.call_count, 1)
+		sleep(0.5)
 		charlie = MockClient('789789789')
 		self.assertEqual(charlie.sounds.play.call_count, 1)
+		sleep(0.5)
 
 		# Wait for clients to connect to server
 		sleep(0.1)

@@ -17,7 +17,3 @@ class Threadripper:
 	# Every item in the Queue is an array of two protobufs.
 	# The first packet is a PacketInfo packet. Second is data.
 	packets_to_send = Queue()
-
-
-# Export for global usage
-threadripper = Threadripper()

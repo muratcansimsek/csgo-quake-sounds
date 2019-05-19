@@ -40,7 +40,7 @@ class Client:
 		header.length = len(raw_packet)
 
 		# ...And off it goes
-		self.threadripper.packets_to_send.put([header, raw_packet])
+		self.threadripper.packets_to_send.put([header, packet])
 
 	def client_update(self):
 		"""Thread-safe: Send a packet informing the server of our current state."""
@@ -209,10 +209,12 @@ class Client:
 				self.request_sounds()
 				self.respond_sounds()
 				try:
-					header, raw_packet = self.threadripper.packets_to_send.get(block=False)
+					header, packet = self.threadripper.packets_to_send.get(block=False)
 					print(f'Sending {PacketInfo.Type.Name(header.type)}')
+					# print(f'BONJOUR JE SUIS {self.sock.getsockname()} J\'ENVOIE {str(packet)}')
 					self.sock.sendall(header.SerializeToString())
 
+					raw_packet = packet.SerializeToString()
 					total_sent = 0
 					while total_sent < header.length:
 						# Give some feedback about sound upload status
@@ -227,6 +229,8 @@ class Client:
 						if sent == 0:
 							raise ConnectionResetError
 						total_sent += sent
+						if total_sent < header.length:
+							raw_packet = raw_packet[sent:]
 				except Empty:
 					# Nothing to send :(
 					pass

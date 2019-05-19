@@ -90,6 +90,7 @@ class Client:
 		self.sounds = []
 
 		self.sock.settimeout(CLIENT_TIMEOUT)
+		Thread(target=self.listen, daemon=True).start()
 
 	def send(self, type, packet):
 		raw_packet = packet.SerializeToString()
@@ -238,7 +239,6 @@ class Client:
 
 	def update(self, packet):
 		with self.lock:
-			print(f'({self.addr}) {self.steamid} -> {packet.steamid}')
 			self.steamid = packet.steamid
 
 			if self.shard == None and packet.shard_code == b'':
@@ -375,7 +375,6 @@ class Server:
 			with self.clients_lock:
 				client = Client(self, csock, addr)
 				self.clients.append(client)
-			Thread(target=client.listen, daemon=True).start()
 
 
 if __name__ == "__main__":
