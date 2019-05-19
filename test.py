@@ -1,4 +1,5 @@
 import random
+import shutil
 import threading
 import unittest
 from time import sleep
@@ -10,7 +11,6 @@ from config import config
 from client import Client
 from packets_pb2 import GameEvent
 from state import CSGOState
-from threadripper import Threadripper
 
 
 class DummyGui:
@@ -49,7 +49,6 @@ class MockClient(Client):
 	"""Simpler client for testing."""
 
 	def __init__(self, steamid=random.randint(1, 999999999)):
-		self.threadripper = Threadripper()
 		self.gui = DummyGui()
 		self.shard_code = 'shard_code'
 		self.sounds = sounds.SoundManager(self)
@@ -83,37 +82,51 @@ class TestClient(unittest.TestCase):
 		threading.Thread(target=self.server.serve, daemon=True).start()
 		sleep(1)  # Wait for server to start (shh it's fine)
 
-	# @patch('util.unsafe_print')  # Feel free to comment this for easier debugging
+	def tearDown(self):
+		try:
+			shutil.move('./sounds/Timeout/test.ogg', './test.ogg')
+		except:
+			pass
+
+	@patch('util.unsafe_print')  # Feel free to comment this for easier debugging
 	@patch('wx.CallAfter')
 	def test_receive_sound(self, *args):
+		# Alice will send basic stuff
 		alice = MockClient('123123123')
 		self.assertEqual(alice.sounds.play.call_count, 1)
-		sleep(0.5)
+		sleep(0.1)
+
+		# Bob will only receive
 		bob = MockClient('456456456')
 		self.assertEqual(bob.sounds.play.call_count, 1)
-		sleep(0.5)
-		charlie = MockClient('789789789')
-		self.assertEqual(charlie.sounds.play.call_count, 1)
-		sleep(0.5)
-
-		# Wait for clients to connect to server
 		sleep(0.1)
+
+		# Charlie will send a custom sound
+		shutil.move('test.ogg', 'sounds/Timeout/test.ogg')
+		charlie = MockClient('789789789')
+		sleep(0.1)
+
 		with self.server.clients_lock:
 			self.assertEqual(len(self.server.clients), 3)
-			# For some reason, the second socket MAGICALLY TAKES OVER the first one
-			# Yes, THEY'RE IN SEPARATE THREADS, contained in separate classes,
-			# and NEVER INTERACT with each other.
-			# So, what happens ? Second socket changes first socket's steam id, but it
-			# never sets its own ! As a result, one of the clients is in a glitched state.
-			# This is where I give up.
-			print(self.server.clients[0].steamid)
-			print(self.server.clients[1].steamid)
-			print(self.server.clients[2].steamid)
 
 		# Send a sound, and assert it is received by bob
 		alice.sounds.send(GameEvent.COLLATERAL, alice.state)
-		sleep(0.5)
+		sleep(0.1)
 		self.assertEqual(bob.sounds.play.call_count, 2)
+
+		# Try MVPs
+		alice.sounds.send(GameEvent.MVP, alice.state)
+		sleep(0.1)
+		self.assertEqual(bob.sounds.play.call_count, 3)
+		alice.state.current_round = 2
+		alice.sounds.send(GameEvent.MVP, alice.state)
+		sleep(0.1)
+		self.assertEqual(bob.sounds.play.call_count, 4)
+
+		# Try charlie's custom sound
+		charlie.sounds.send(GameEvent.TIMEOUT, charlie.state)
+		sleep(0.1)
+		self.assertEqual(bob.sounds.play.call_count, 5)
 
 if __name__ == '__main__':
 	unittest.main()

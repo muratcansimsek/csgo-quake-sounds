@@ -47,7 +47,6 @@ class Shard:
 		with self.lock:
 			for client in self.clients:
 				with client.lock:
-					print(f'steamid {client.steamid}')
 					if client.steamid != steamid and client.steamid != 0:
 						print(f'{str(self)} Playing {small_hash(hash)} @ {str(client.addr)}')
 						client.sock.sendall(raw_header)
@@ -282,34 +281,33 @@ class Client:
 
 		while self.server.running:
 			try:
-				data = self.sock.recv(7)
+				data = self.sock.recv(8)
 				if len(data) == 0:
 					break
 
-				packet_info = PacketInfo()
-				packet_info.ParseFromString(data)
+				packet_len = int.from_bytes(data[0:4], byteorder='big')
+				packet_type = int.from_bytes(data[4:8], byteorder='big')
+				if packet_len > 3 * 1024 * 1024:
+					# Don't allow files or packets over 3 Mb
+					print('%s Received file over 2Mb, disconnecting' % str(self.addr))
+					break
+
 				try:
-					if packet_info.type != PacketInfo.CLIENT_UPDATE:
-						packet_type = PacketInfo.Type.Name(packet_info.type)
-						print('%s Received %s ' % (str(self.addr), packet_type))
+					if packet_type != PacketInfo.CLIENT_UPDATE:
+						print('%s Received %s ' % (str(self.addr), PacketInfo.Type.Name(packet_type)))
 				except:
 					print('%s Received invalid packet type, disconnecting' % str(self.addr))
 					with self.lock:
 						self.sock.shutdown(socket.SHUT_RDWR)
 					break
 
-				if packet_info.length > 3 * 1024 * 1024:
-					# Don't allow files or packets over 3 Mb
-					print('%s Received file over 2Mb, disconnecting' % str(self.addr))
-					break
-
 				data = b''
 				received = 0
-				while received < packet_info.length:
-					chunk = self.sock.recv(packet_info.length - received)
+				while received < packet_len:
+					chunk = self.sock.recv(packet_len - received)
 					data += chunk
 					received += len(chunk)
-				self.handle(packet_info.type, data)
+				self.handle(packet_type, data)
 			except DecodeError:
 				break
 			except ConnectionResetError:

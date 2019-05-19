@@ -1,7 +1,7 @@
 import os
 import socket
 import wx
-from queue import Empty
+from queue import Empty, Queue, LifoQueue
 from time import sleep
 from threading import Thread
 
@@ -22,8 +22,11 @@ class Client:
 	uploaded = 0
 	upload_total = 0
 
-	def __init__(self, gui, global_mutex):
-		self.threadripper = global_mutex
+	packets_to_send = Queue()
+	sounds_to_download = LifoQueue()
+	sounds_to_upload = LifoQueue()
+
+	def __init__(self, gui):
 		self.gui = gui
 		self.shard_code = gui.shardCodeIpt.GetValue()
 		self.sounds = SoundManager(self)
@@ -35,12 +38,10 @@ class Client:
 	def send(self, type, packet):
 		# Build the packet...
 		raw_packet = packet.SerializeToString()
-		header = PacketInfo()
-		header.type = type
-		header.length = len(raw_packet)
+		raw_header = len(raw_packet).to_bytes(4, byteorder='big') + type.to_bytes(4, byteorder='big')
 
 		# ...And off it goes
-		self.threadripper.packets_to_send.put([header, packet])
+		self.packets_to_send.put([raw_header, raw_packet])
 
 	def client_update(self):
 		"""Thread-safe: Send a packet informing the server of our current state."""
@@ -113,7 +114,7 @@ class Client:
 			return
 
 		try:
-			hash = self.threadripper.sounds_to_download.get(block=False)
+			hash = self.sounds_to_download.get(block=False)
 			packet = SoundRequest()
 			packet.sound_hash.append(hash)
 			self.send(PacketInfo.SOUND_REQUEST, packet)
@@ -127,7 +128,7 @@ class Client:
 			return
 
 		try:
-			hash = self.threadripper.sounds_to_upload.get(block=False)
+			hash = self.sounds_to_upload.get(block=False)
 			filepath = os.path.join('cache', hash.hex())
 			with open(filepath, 'rb') as infile:
 				packet = SoundResponse()
@@ -147,14 +148,14 @@ class Client:
 			packet.ParseFromString(raw_packet)
 			if not self.sounds.play(packet):
 				self.download_total = self.download_total + 1
-				self.threadripper.sounds_to_download.put(packet.sound_hash)
+				self.sounds_to_download.put(packet.sound_hash)
 		elif packet_type == PacketInfo.SOUND_REQUEST:
 			req = SoundRequest()
 			req.ParseFromString(raw_packet)
 
 			self.upload_total += len(req.sound_hash)
 			for hash in req.sound_hash:
-				self.threadripper.sounds_to_upload.put(hash)
+				self.sounds_to_upload.put(hash)
 		elif packet_type == PacketInfo.SOUND_RESPONSE:
 			packet = SoundResponse()
 			packet.ParseFromString(raw_packet)
@@ -171,7 +172,7 @@ class Client:
 						download_list.append(hash)
 			self.download_total += len(download_list)
 			for hash in download_list:
-				self.threadripper.sounds_to_download.put(hash)
+				self.sounds_to_download.put(hash)
 		else:
 			print("Unhandled packet type!")
 
@@ -209,17 +210,16 @@ class Client:
 				self.request_sounds()
 				self.respond_sounds()
 				try:
-					header, packet = self.threadripper.packets_to_send.get(block=False)
-					print(f'Sending {PacketInfo.Type.Name(header.type)}')
-					# print(f'BONJOUR JE SUIS {self.sock.getsockname()} J\'ENVOIE {str(packet)}')
-					self.sock.sendall(header.SerializeToString())
+					raw_header, raw_packet = self.packets_to_send.get(block=False)
+					self.sock.sendall(raw_header)
+					packet_length = int.from_bytes(raw_header[0:4], byteorder='big')
+					packet_type = int.from_bytes(raw_header[4:8], byteorder='big')
 
-					raw_packet = packet.SerializeToString()
 					total_sent = 0
-					while total_sent < header.length:
+					while total_sent < packet_length:
 						# Give some feedback about sound upload status
-						if header.type == PacketInfo.SOUND_RESPONSE:
-							sent_percent = int(total_sent / header.length * 100)
+						if packet_type == PacketInfo.SOUND_RESPONSE:
+							sent_percent = int(total_sent / packet_length * 100)
 							wx.CallAfter(
 								self.gui.SetStatusText,
 								f'Uploading sound {self.uploaded + 1}/{self.upload_total}... ({sent_percent}%)'
@@ -229,7 +229,7 @@ class Client:
 						if sent == 0:
 							raise ConnectionResetError
 						total_sent += sent
-						if total_sent < header.length:
+						if total_sent < packet_length:
 							raw_packet = raw_packet[sent:]
 				except Empty:
 					# Nothing to send :(

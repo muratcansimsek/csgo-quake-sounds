@@ -6,7 +6,6 @@ import wx.adv
 import client
 import config
 from packets_pb2 import GameEvent, PlaySound
-from threadripper import threadripper
 
 
 class TaskbarIcon(wx.adv.TaskBarIcon):
@@ -33,7 +32,7 @@ class MainFrame(wx.Frame):
         # Start threads
         self.CreateStatusBar()
         self.SetStatusText("Loading sounds...")
-        self.client = client.Client(self, threadripper)
+        self.client = client.Client(self)
 
         vbox = wx.BoxSizer(wx.VERTICAL)
         vbox.AddStretchSpacer()
