@@ -184,7 +184,10 @@ class CSGOState:
         self.lock = Lock()
         self.old_state = None
         self.client = client
-        Thread(target=HTTPServer(('127.0.0.1', 3000), PostHandler).serve_forever, daemon=True).start()
+
+        server = HTTPServer(('127.0.0.1', 3000), PostHandler)
+        server.RequestHandlerClass.state = self
+        Thread(target=server.serve_forever, daemon=True).start()
 
     def is_ingame(self):
         return self.old_state is not None and self.old_state.is_ingame is True
@@ -217,10 +220,6 @@ class CSGOState:
 
 
 class PostHandler(BaseHTTPRequestHandler):
-    def __init__(self, *args, state):
-        super().__init__(*args)
-        self.state = state
-
     def do_POST(self):
         content_len = int(self.headers['Content-Length'])
         body = self.rfile.read(content_len)
