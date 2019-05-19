@@ -129,7 +129,7 @@ class SoundManager:
             return True
         if str(packet.steamid) != self.playerid and packet.steamid != 0:
             return True
-        
+
         with self.cache_lock:
             # Sound is already loaded
             if packet.sound_hash in self.cache:

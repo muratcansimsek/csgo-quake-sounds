@@ -185,10 +185,13 @@ class CSGOState:
         self.old_state = None
         self.client = client
         Thread(target=HTTPServer(('127.0.0.1', 3000), PostHandler).serve_forever, daemon=True).start()
+
+    def is_ingame(self):
+        return self.old_state is not None and self.old_state.is_ingame is True
     
     def is_alive(self):
         with self.lock:
-            if self.old_state == None or not self.old_state.is_ingame:
+            if not self.is_ingame():
                 return False
             if self.old_state.phase != 'live':
                 return False
@@ -202,7 +205,7 @@ class CSGOState:
         with self.lock:
             newstate = PlayerState(json, self.client.sounds)
 
-            if self.old_state == None or self.old_state.steamid != newstate.steamid or self.old_state.is_ingame != newstate.is_ingame:
+            if self.old_state == None or self.old_state.steamid != newstate.steamid:
                 should_update_client = True
 
             newstate.compare(self.old_state)

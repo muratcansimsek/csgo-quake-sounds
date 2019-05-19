@@ -47,7 +47,8 @@ class Shard:
 		with self.lock:
 			for client in self.clients:
 				with client.lock:
-					if client.ingame and client.steamid != steamid:
+					print(f'steamid {client.steamid}')
+					if client.steamid != steamid and client.steamid != 0:
 						print(f'{str(self)} Playing {small_hash(hash)} @ {str(client.addr)}')
 						client.sock.sendall(raw_header)
 						client.sock.sendall(raw_packet)
@@ -79,6 +80,7 @@ class Client:
 		self.sock = sock
 		self.addr = addr
 		self.steamid = 0
+		self.round = 0
 
 		self.shard = None
 		self.last_shard_change = datetime.datetime.min
@@ -86,9 +88,6 @@ class Client:
 		# List of sound hashes the user posesses
 		# The sounds may not be cached by the server
 		self.sounds = []
-
-		self.round = 0
-		self.ingame = False
 
 		self.sock.settimeout(CLIENT_TIMEOUT)
 
@@ -239,7 +238,7 @@ class Client:
 
 	def update(self, packet):
 		with self.lock:
-			self.ingame = packet.status == ClientUpdate.CONNECTED
+			print(f'({self.addr}) {self.steamid} -> {packet.steamid}')
 			self.steamid = packet.steamid
 
 			if self.shard == None and packet.shard_code == b'':
@@ -376,7 +375,7 @@ class Server:
 			with self.clients_lock:
 				client = Client(self, csock, addr)
 				self.clients.append(client)
-				Thread(target=client.listen, daemon=True).start()
+			Thread(target=client.listen, daemon=True).start()
 
 
 if __name__ == "__main__":

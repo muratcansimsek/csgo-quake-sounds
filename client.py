@@ -13,22 +13,22 @@ from util import print
 
 
 class Client:
+	sock = None
+	connected = False
+	reconnect_timeout = 1
+	shard_code = ''
+	downloaded = 0
+	download_total = 0
+	uploaded = 0
+	upload_total = 0
+
 	def __init__(self, gui, global_mutex):
-		self.sock = None
-		self.connected = False
-		self.reconnect_timeout = 1
-		self.shard_code = ''
 		self.threadripper = global_mutex
 		self.gui = gui
 		self.shard_code = gui.shardCodeIpt.GetValue()
-
-		self.downloaded = 0
-		self.download_total = 0
-		self.uploaded = 0
-		self.upload_total = 0
-
 		self.sounds = SoundManager(self)
 		self.state = CSGOState(self)
+
 		Thread(target=self.listen, daemon=True).start()
 		Thread(target=self.keepalive, daemon=True).start()
 
@@ -45,17 +45,18 @@ class Client:
 	def client_update(self):
 		"""Thread-safe: Send a packet informing the server of our current state."""
 		packet = ClientUpdate()
-		with self.state.lock:
-			if self.state.old_state == None or not self.state.old_state.is_ingame:
-				packet.status = ClientUpdate.UNCONNECTED
-				packet.map = b''
-				packet.steamid = 0
-			else:
-				packet.status = ClientUpdate.CONNECTED
-				packet.map = b''
-				packet.steamid = int(self.state.old_state.steamid)
 
+		# Unused
+		packet.status = ClientUpdate.CONNECTED
+		packet.map = b''
+
+		# Set current steamid and shard core
+		packet.steamid = 0
+		with self.state.lock:
+			if self.state.old_state is not None and self.state.old_state.steamid is not None:
+				packet.steamid = int(self.state.old_state.steamid)
 		packet.shard_code = self.shard_code.encode('utf-8')
+
 		self.send(PacketInfo.CLIENT_UPDATE, packet)
 
 	def update_status(self):
@@ -141,7 +142,7 @@ class Client:
 	def handle(self, packet_type, raw_packet):
 		print('Received %s packet' % PacketInfo.Type.Name(packet_type))
 
-		if packet_type == PacketInfo.PLAY_SOUND:
+		if packet_type == PacketInfo.PLAY_SOUND and self.state.is_ingame():
 			packet = PlaySound()
 			packet.ParseFromString(raw_packet)
 			if not self.sounds.play(packet):
