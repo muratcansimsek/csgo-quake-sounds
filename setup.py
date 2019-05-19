@@ -1,9 +1,10 @@
+import sys
 from cx_Freeze import setup, Executable
 
 base = None
 # To hide console on release versions, uncomment this :
-#if sys.platform == "win32":
-#    base = "Win32GUI"
+if sys.platform == "win32":
+    base = "Win32GUI"
 
 setup(  name = "ccs",
         version = "1.5",

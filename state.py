@@ -1,15 +1,16 @@
 """Related to CSGO Gamestate"""
 import json
-from threading import Lock
-from http.server import BaseHTTPRequestHandler
+from threading import Lock, Thread
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import config
-from sounds import sounds
 from packets_pb2 import GameEvent
 
+
 class PlayerState:
-    def __init__(self, json):
+    def __init__(self, json, sounds):
         self.valid = False
+        self.sounds = sounds
 
         provider = json.get('provider', {})
         if not provider:
@@ -108,7 +109,7 @@ class PlayerState:
 
         # Play timeout music
         if self.phase == 'freezetime' and self.play_timeout:
-            sounds.send(GameEvent.TIMEOUT, self)
+            self.sounds.send(GameEvent.TIMEOUT, self)
             self.play_timeout = False
 
         # Reset state when switching players (used for MVPs)
@@ -118,12 +119,12 @@ class PlayerState:
 
         # Play round start, win, lose, MVP
         if self.is_local_player and self.mvps == old_state.mvps + 1:
-            sounds.send(GameEvent.MVP, self)
+            self.sounds.send(GameEvent.MVP, self)
         elif self.phase != old_state.phase:
             if self.phase == 'over' and self.mvps == old_state.mvps:
-                sounds.send(GameEvent.ROUND_WIN if self.won_round else GameEvent.ROUND_LOSE, self)
+                self.sounds.send(GameEvent.ROUND_WIN if self.won_round else GameEvent.ROUND_LOSE, self)
             elif self.phase == 'live':
-                sounds.send(GameEvent.ROUND_START, self)
+                self.sounds.send(GameEvent.ROUND_START, self)
 
         # Don't play player-triggered sounds below this ##########
         if not self.is_local_player:
@@ -133,22 +134,22 @@ class PlayerState:
         # Lost kills - either teamkilled or suicided
         if self.total_kills < old_state.total_kills:
             if self.total_deaths == old_state.total_deaths + 1:
-                sounds.send(GameEvent.SUICIDE, self)
+                self.sounds.send(GameEvent.SUICIDE, self)
             elif self.total_deaths == old_state.total_deaths:
-                sounds.send(GameEvent.TEAMKILL, self)
+                self.sounds.send(GameEvent.TEAMKILL, self)
         # Didn't suicide or teamkill -> check if player just died
         elif self.total_deaths == old_state.total_deaths + 1:
-            sounds.send(GameEvent.DEATH, self)
+            self.sounds.send(GameEvent.DEATH, self)
 
         # Player got flashed
         if self.flash_opacity > 150 and self.flash_opacity > old_state.flash_opacity:
-            sounds.send(GameEvent.FLASH, self)
+            self.sounds.send(GameEvent.FLASH, self)
 
         # Player killed someone
         if self.round_kills == old_state.round_kills + 1:
             # Kill with knife equipped
             if self.is_knife_active:
-                sounds.send(GameEvent.KNIFE, self)
+                self.sounds.send(GameEvent.KNIFE, self)
             # Kill with weapon equipped
             else:
                 # Headshot
@@ -157,39 +158,40 @@ class PlayerState:
                     with config.lock:
                         prefer_headshots = config.config['Sounds'].getboolean('PreferHeadshots', False)
                     if prefer_headshots:
-                        sounds.send(GameEvent.HEADSHOT, self)
+                        self.sounds.send(GameEvent.HEADSHOT, self)
                         return
                     # No headshot override : do not play over double kills, etc
                     if self.round_kills < 2 or self.round_kills > 5:
-                        sounds.send(GameEvent.HEADSHOT, self)
+                        self.sounds.send(GameEvent.HEADSHOT, self)
 
                 # Killstreaks, headshotted or not
                 if self.round_kills == 2:
-                    sounds.send(GameEvent.KILL, self)
+                    self.sounds.send(GameEvent.KILL, self)
                 elif self.round_kills == 3:
-                    sounds.send(GameEvent.KILL, self)
+                    self.sounds.send(GameEvent.KILL, self)
                 elif self.round_kills == 4:
-                    sounds.send(GameEvent.KILL, self)
+                    self.sounds.send(GameEvent.KILL, self)
                 elif self.round_kills == 5:
-                    sounds.send(GameEvent.KILL, self)
+                    self.sounds.send(GameEvent.KILL, self)
         # Player killed multiple players
         elif self.round_kills > old_state.round_kills:
-            sounds.send(GameEvent.COLLATERAL, self)
+            self.sounds.send(GameEvent.COLLATERAL, self)
 
 class CSGOState:
     """Follows the CSGO state via gamestate integration"""
 
-    def __init__(self):
+    def __init__(self, client):
         self.lock = Lock()
         self.old_state = None
-        self.client = None
-    
-    def init(self, client):
         self.client = client
+        Thread(target=HTTPServer(('127.0.0.1', 3000), PostHandler).serve_forever, daemon=True).start()
+
+    def is_ingame(self):
+        return self.old_state is not None and self.old_state.is_ingame is True
     
     def is_alive(self):
         with self.lock:
-            if self.old_state == None or not self.old_state.is_ingame:
+            if not self.is_ingame():
                 return False
             if self.old_state.phase != 'live':
                 return False
@@ -201,9 +203,9 @@ class CSGOState:
         """Update the entire game state"""
         should_update_client = False
         with self.lock:
-            newstate = PlayerState(json)
+            newstate = PlayerState(json, self.client.sounds)
 
-            if self.old_state == None or self.old_state.steamid != newstate.steamid or self.old_state.is_ingame != newstate.is_ingame:
+            if self.old_state == None or self.old_state.steamid != newstate.steamid:
                 should_update_client = True
 
             newstate.compare(self.old_state)
@@ -213,17 +215,20 @@ class CSGOState:
             if should_update_client:
                 self.client.client_update()
 
+
 class PostHandler(BaseHTTPRequestHandler):
+    def __init__(self, *args, state):
+        super().__init__(*args)
+        self.state = state
+
     def do_POST(self):
         content_len = int(self.headers['Content-Length'])
         body = self.rfile.read(content_len)
         self.send_response(200)
         self.end_headers()
-        state.update(json.loads(body))
+        self.state.update(json.loads(body))
         return
     
     def log_message(self, format, *args):
         # Do not spam the console with POSTs
         return
-
-state = CSGOState()

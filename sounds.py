@@ -54,21 +54,20 @@ class SampleCollection:
 
 class SoundManager:
     """Loads and plays sounds"""
-    def __init__(self):
+    def __init__(self, client):
         self.collections = {}
         self.wanted_sounds = {}
         self.cache_lock = Lock()
         self.cache = {}
         self.playerid = None
-        self.client = None
+        self.client = client
+        self.loaded = False
         with config.lock:
             self.volume = config.config['Sounds'].getint('Volume', 50)
 
-    def init(self, client):
-        self.client = client
-
     def load(self, one_sound_loaded_callback, error_callback):
         """Reloads all sounds from the sounds/ folder"""
+        self.loaded = False
         with self.cache_lock:
             for path in os.listdir('sounds'):
                 complete_path = os.path.join('sounds', path)
@@ -84,6 +83,7 @@ class SoundManager:
             if hash is None:
                 hash = self.get_random(GameEvent.HEADSHOT, None)
             playpacket.sound_hash = hash
+        self.loaded = True
         self.play(playpacket)
 
     def sound_list(self, sounds_dir):
@@ -125,9 +125,11 @@ class SoundManager:
         return self.collections[sound].get_random_hash()
 
     def play(self, packet):
+        if self.loaded is False:
+            return True
         if str(packet.steamid) != self.playerid and packet.steamid != 0:
             return True
-        
+
         with self.cache_lock:
             # Sound is already loaded
             if packet.sound_hash in self.cache:
@@ -207,6 +209,3 @@ class SoundManager:
                 playpacket.steamid = 0
                 playpacket.sound_hash = hash
                 self.play(playpacket)
-
-
-sounds = SoundManager()
