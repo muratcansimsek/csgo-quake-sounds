@@ -7,7 +7,7 @@ from threading import Thread
 
 import config
 from packets_pb2 import PacketInfo, PlaySound, SoundRequest, SoundResponse, ClientUpdate
-from sounds import sounds
+from sounds import SoundManager
 from state import CSGOState
 from util import print
 
@@ -27,7 +27,7 @@ class Client:
 		self.uploaded = 0
 		self.upload_total = 0
 
-		sounds.init(self)
+		self.sounds = SoundManager(self)
 		self.state = CSGOState(self)
 		Thread(target=self.listen, daemon=True).start()
 		Thread(target=self.keepalive, daemon=True).start()
@@ -46,7 +46,7 @@ class Client:
 		"""Thread-safe: Send a packet informing the server of our current state."""
 		packet = ClientUpdate()
 		with self.state.lock:
-			if self.state.old_state == None or not state.old_state.is_ingame:
+			if self.state.old_state == None or not self.state.old_state.is_ingame:
 				packet.status = ClientUpdate.UNCONNECTED
 				packet.map = b''
 				packet.steamid = 0
@@ -79,7 +79,7 @@ class Client:
 				wx.CallAfter(self.gui.SetStatusText, 'Room "%s" - Not in a match.' % self.shard_code)
 		
 	def file_callback(self, hash, file):
-		sounds.cache[hash] = file
+		self.sounds.cache[hash] = file
 		self.loaded_sounds = self.loaded_sounds + 1
 		wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.loaded_sounds, self.max_sounds))
 	
@@ -92,9 +92,9 @@ class Client:
 	def reload_sounds(self):
 		"""Reloads all sounds. Not thread safe, should only be called from GUI"""
 		self.loaded_sounds = 0
-		self.max_sounds = len(sounds.sound_list('sounds'))
+		self.max_sounds = len(self.sounds.sound_list('sounds'))
 
-		sounds.load(self.file_callback, self.error_callback)
+		self.sounds.load(self.file_callback, self.error_callback)
 		wx.CallAfter(self.gui.updateSoundsBtn.Enable)
 		self.update_status()
 
@@ -102,8 +102,8 @@ class Client:
 		if not self.connected:
 			return
 		packet = SoundRequest()
-		with sounds.cache_lock:
-			for hash in sounds.cache:
+		with self.sounds.cache_lock:
+			for hash in self.sounds.cache:
 				packet.sound_hash.append(hash)
 		self.send(PacketInfo.SOUNDS_LIST, packet)
 
@@ -144,7 +144,7 @@ class Client:
 		if packet_type == PacketInfo.PLAY_SOUND:
 			packet = PlaySound()
 			packet.ParseFromString(raw_packet)
-			if not sounds.play(packet):
+			if not self.sounds.play(packet):
 				self.download_total = self.download_total + 1
 				self.threadripper.sounds_to_download.put(packet.sound_hash)
 		elif packet_type == PacketInfo.SOUND_REQUEST:
@@ -157,16 +157,16 @@ class Client:
 		elif packet_type == PacketInfo.SOUND_RESPONSE:
 			packet = SoundResponse()
 			packet.ParseFromString(raw_packet)
-			sounds.save(packet)
-			sounds.play_received(packet.hash)
+			self.sounds.save(packet)
+			self.sounds.play_received(packet.hash)
 		elif packet_type == PacketInfo.SOUNDS_LIST:
 			packet = SoundRequest()
 			packet.ParseFromString(raw_packet)
 
 			download_list = []
-			with sounds.cache_lock:
+			with self.sounds.cache_lock:
 				for hash in packet.sound_hash:
-					if hash not in sounds.cache:
+					if hash not in self.sounds.cache:
 						download_list.append(hash)
 			self.download_total += len(download_list)
 			for hash in download_list:

@@ -6,7 +6,6 @@ import wx.adv
 import client
 import config
 from packets_pb2 import GameEvent, PlaySound
-from sounds import sounds
 from threadripper import threadripper
 
 
@@ -28,20 +27,22 @@ class MainFrame(wx.Frame):
         self.panel = wx.Panel(self)
         self.SetIcon(wx.Icon("icon.ico"))
 
+        # Client needs self.shardCodeIpt
+        friends_zone = self.make_friends_zone()
+
+        # Start threads
+        self.CreateStatusBar()
+        self.SetStatusText("Loading sounds...")
+        self.client = client.Client(self, threadripper)
+
         vbox = wx.BoxSizer(wx.VERTICAL)
         vbox.AddStretchSpacer()
         vbox.Add(self.make_volume_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
-        vbox.Add(self.make_friends_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
+        vbox.Add(friends_zone, border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
         vbox.Add(self.make_settings_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
         vbox.AddStretchSpacer()
         self.panel.SetSizer(vbox)
         self.panel.Layout()
-
-        self.CreateStatusBar()
-        self.SetStatusText("Loading sounds...")
-
-        # Start threads
-        self.client = client.Client(self, threadripper)
         self.UpdateSounds(None)
 
         self.taskbarIcon = TaskbarIcon(self)
@@ -52,8 +53,8 @@ class MainFrame(wx.Frame):
         self.Show()
     
     def make_volume_zone(self):
-        with sounds.cache_lock:
-            self.volumeSlider = wx.Slider(self.panel, value=sounds.volume, size=(272, 25))
+        with self.client.sounds.cache_lock:
+            self.volumeSlider = wx.Slider(self.panel, value=self.client.sounds.volume, size=(272, 25))
         self.Bind(wx.EVT_COMMAND_SCROLL_CHANGED, self.OnVolumeSlider, self.volumeSlider)
 
         volumeZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Volume")
@@ -126,15 +127,15 @@ class MainFrame(wx.Frame):
 
     def OnVolumeSlider(self, event):
         config.set('Sounds', 'Volume', self.volumeSlider.Value)
-        with sounds.cache_lock:
+        with self.client.sounds.cache_lock:
             # Volume didn't change
-            if sounds.volume == self.volumeSlider.Value:
+            if self.client.sounds.volume == self.volumeSlider.Value:
                 return
-            sounds.volume = self.volumeSlider.Value
+            self.client.sounds.volume = self.volumeSlider.Value
             playpacket = PlaySound()
             playpacket.steamid = 0
-            playpacket.sound_hash = sounds.get_random(GameEvent.HEADSHOT, None)
-        sounds.play(playpacket)
+            playpacket.sound_hash = self.client.sounds.get_random(GameEvent.HEADSHOT, None)
+        self.client.sounds.play(playpacket)
 
     def OpenSoundsDir(self, event):
         # TODO linux
