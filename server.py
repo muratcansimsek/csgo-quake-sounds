@@ -44,11 +44,13 @@ class Shard:
 
 		print(f'{str(self)} Playing {small_hash(hash)} for {steamid}')
 
+		played = False
 		with self.lock:
 			for client in self.clients:
 				with client.lock:
 					if client.steamid != steamid and client.steamid != 0:
-						print(f'{str(self)} Playing {small_hash(hash)} @ {str(client.addr)}')
+						played = True
+						print(f'{str(self)} -> {str(client.addr)}')
 						client.sock.sendall(raw_header)
 						client.sock.sendall(raw_packet)
 
@@ -56,7 +58,10 @@ class Shard:
 						self.round = client.round
 						self.round_events = []
 
-		print(f'Done playing {small_hash(hash)}')
+		if played is True:
+			print(f'Done playing {small_hash(hash)}')
+		else:
+			print("Whoops, nevermind, this guy is all alone")
 
 	def play_shared(self, event, hash):
 		should_play = False
