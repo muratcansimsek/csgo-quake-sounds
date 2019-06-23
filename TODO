@@ -1,5 +1,8 @@
 - Make release executable
-- Make basic unit tests
+- Variable sound pitch
+- Switch to pydub
+- Client: Don't request sounds when sounds are not loaded
+  - Or, server : ignore sound request before sounds list
 
 Bonus:
 - Encrypted connection

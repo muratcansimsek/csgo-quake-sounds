@@ -1,3 +1,4 @@
+import os
 import random
 import shutil
 import threading
@@ -75,6 +76,11 @@ class TestClient(unittest.TestCase):
 	"""
 
 	def setUp(self):
+		# Clear cache directory
+		shutil.rmtree('cache')
+		os.mkdir('cache')
+		open('cache/.gitkeep', 'a').close()
+
 		# Run a local sound server
 		config.set('Network', 'ServerIP', '127.0.0.1')
 		config.set('Network', 'ServerPort', '4004')
@@ -88,13 +94,13 @@ class TestClient(unittest.TestCase):
 		except:
 			pass
 
-	@patch('util.unsafe_print')  # Feel free to comment this for easier debugging
+	#@patch('util.unsafe_print')  # Feel free to comment this for easier debugging
 	@patch('wx.CallAfter')
 	def test_receive_sound(self, *args):
 		# Alice will send basic stuff
 		alice = MockClient('123123123')
 		self.assertEqual(alice.sounds.play.call_count, 1)
-		sleep(0.1)
+		sleep(10)
 
 		# Bob will only receive
 		bob = MockClient('456456456')
@@ -125,7 +131,7 @@ class TestClient(unittest.TestCase):
 
 		# Try charlie's custom sound
 		charlie.sounds.send(GameEvent.TIMEOUT, charlie.state)
-		sleep(0.1)
+		sleep(2)
 		self.assertEqual(bob.sounds.play.call_count, 5)
 
 if __name__ == '__main__':

@@ -98,12 +98,10 @@ class Client:
 
 	def send(self, type, packet):
 		raw_packet = packet.SerializeToString()
-		header = PacketInfo()
-		header.type = type
-		header.length = len(raw_packet)
+		raw_header = len(raw_packet).to_bytes(4, byteorder='big') + type.to_bytes(4, byteorder='big')
 		with self.lock:
 			print(f'Sending {PacketInfo.Type.Name(type)} to {str(self.addr)}')
-			self.sock.sendall(header.SerializeToString())
+			self.sock.sendall(raw_header)
 			self.sock.sendall(raw_packet)
 
 	def check_or_request_sounds(self, hashes):

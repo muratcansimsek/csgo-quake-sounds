@@ -237,7 +237,7 @@ class Client:
 
 				# Let's try RECEIVING some packets!
 				self.sock.settimeout(0.1)
-				data = self.sock.recv(7)
+				data = self.sock.recv(8)
 				self.sock.settimeout(None)
 				if len(data) == 0:
 					print('Invalid header size, reconnecting')
@@ -245,9 +245,10 @@ class Client:
 					self.sock.shutdown(socket.SHUT_RDWR)
 					continue
 
-				packet_info = PacketInfo()
-				packet_info.ParseFromString(data)
-				if packet_info.length > 3 * 1024 * 1024:
+
+				packet_len = int.from_bytes(data[0:4], byteorder='big')
+				packet_type = int.from_bytes(data[4:8], byteorder='big')
+				if packet_len > 3 * 1024 * 1024:
 					# Don't allow files or packets over 3 Mb
 					print('Invalid payload size, reconnecting')
 					self.connected = False
@@ -256,22 +257,22 @@ class Client:
 
 				data = b''
 				received = 0
-				while received < packet_info.length:
+				while received < packet_len:
 					# Give some feedback about download status
-					if packet_info.type == PacketInfo.SOUND_RESPONSE:
+					if packet_type == PacketInfo.SOUND_RESPONSE:
 						wx.CallAfter(
 							self.gui.SetStatusText,
 							'Downloading sound {0}/{1}... ({2}%)'.format(
 								self.downloaded + 1,
 								self.download_total,
-								int(received / packet_info.length * 100)
+								int(received / packet_len * 100)
 							)
 						)
 
-					chunk = self.sock.recv(packet_info.length - received)
+					chunk = self.sock.recv(packet_len - received)
 					data += chunk
 					received += len(chunk)
-				self.handle(packet_info.type, data)
+				self.handle(packet_type, data)
 
 			# Handle connection errors
 			except ConnectionResetError:
