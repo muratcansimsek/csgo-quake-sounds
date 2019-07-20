@@ -53,16 +53,8 @@ message GameEvent {
 }
 
 message ClientUpdate {
-	enum PlayerStatus {
-		// Player connects/disconnects from an ingame server
-		CONNECTED = 0;
-		UNCONNECTED = 1;
-	}
-
-	PlayerStatus status = 1; // unused
-	bytes map = 2;           // unused
-	fixed64 steamid = 3;
-	bytes shard_code = 4;
+	fixed64 steamid = 1;
+	bytes shard_code = 2;
 }
 
 

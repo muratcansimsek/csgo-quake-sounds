@@ -52,10 +52,6 @@ class Client:
 
 		packet = ClientUpdate()
 
-		# Unused
-		packet.status = ClientUpdate.CONNECTED
-		packet.map = b''
-
 		# Set current steamid and shard core
 		packet.steamid = 0
 		with self.state.lock:
@@ -65,7 +61,7 @@ class Client:
 
 		self.send(PacketInfo.CLIENT_UPDATE, packet)
 
-	def update_status(self):
+	def update_status(self) -> None:
 		if not self.connected:
 			wx.CallAfter(self.gui.SetStatusText, 'Connecting to sound sync server...')
 			return
@@ -84,7 +80,7 @@ class Client:
 				)
 			else:
 				wx.CallAfter(self.gui.SetStatusText, 'Room "%s" - Not in a match.' % self.room_name)
-	
+
 	def file_callback(self) -> None:
 		self.loaded_sounds = self.loaded_sounds + 1
 		wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.loaded_sounds, self.max_sounds))
@@ -145,11 +141,11 @@ class Client:
 		print('Received %s packet' % PacketInfo.Type.Name(packet_type))
 
 		if packet_type == PacketInfo.PLAY_SOUND and self.state.is_ingame():
-			packet = PlaySound()
-			packet.ParseFromString(raw_packet)
-			if not self.sounds.play(packet):
+			pspacket = PlaySound()
+			pspacket.ParseFromString(raw_packet)
+			if not self.sounds.play(pspacket):
 				self.download_total = self.download_total + 1
-				self.sounds_to_download.put(packet.sound_hash)
+				self.sounds_to_download.put(pspacket.sound_hash)
 		elif packet_type == PacketInfo.SOUND_REQUEST:
 			req = SoundRequest()
 			req.ParseFromString(raw_packet)
@@ -158,16 +154,16 @@ class Client:
 			for hash in req.sound_hash:
 				self.sounds_to_upload.put(hash)
 		elif packet_type == PacketInfo.SOUND_RESPONSE:
-			packet = SoundResponse()
-			packet.ParseFromString(raw_packet)
-			self.sounds.save(packet)
+			srpacket = SoundResponse()
+			srpacket.ParseFromString(raw_packet)
+			self.sounds.save(srpacket)
 		elif packet_type == PacketInfo.SOUNDS_LIST:
-			packet = SoundRequest()
-			packet.ParseFromString(raw_packet)
+			srqpacket = SoundRequest()
+			srqpacket.ParseFromString(raw_packet)
 
 			with self.sounds.lock:
 				available_sounds = self.sounds.available_sounds.values()
-			for hash in packet.sound_hash:
+			for hash in srqpacket.sound_hash:
 				if hash.hex() not in available_sounds:
 					self.sounds_to_download.put(hash)
 					self.download_total = self.download_total + 1

@@ -10,7 +10,7 @@ from threading import Lock
 from typing import Callable, Dict, List, Optional
 
 import config
-from packets_pb2 import GameEvent, PacketInfo, PlaySound
+from packets_pb2 import GameEvent, PacketInfo, PlaySound, SoundResponse
 from util import print, get_event_class, small_hash
 
 
@@ -108,7 +108,7 @@ class SoundManager:
         """Play sound from its file path. Blocking call."""
         play(sound.apply_gain(gain))
 
-    def play(self, packet) -> bool:
+    def play(self, packet: PlaySound) -> bool:
         """Tries playing a sound from a PlaySound packet.
 
         Returns True if the sound was played successfully.
@@ -138,7 +138,7 @@ class SoundManager:
                 threading.Thread(target=self._play, args=(sound, gain,), daemon=True).start()
                 return True
 
-    def save(self, packet) -> None:
+    def save(self, packet: SoundResponse) -> None:
         filepath = os.path.join('sounds', 'Downloaded', packet.hash.hex())
         with open(filepath, 'wb') as outfile:
             outfile.write(packet.data)

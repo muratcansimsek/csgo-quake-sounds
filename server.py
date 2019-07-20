@@ -36,11 +36,7 @@ class Shard:
 		packet.steamid = steamid
 		packet.sound_hash = hash
 		raw_packet = packet.SerializeToString()
-
-		header = PacketInfo()
-		header.type = PacketInfo.PLAY_SOUND
-		header.length = len(raw_packet)
-		raw_header = header.SerializeToString()
+		raw_header = len(raw_packet).to_bytes(4, byteorder='big') + PacketInfo.PLAY_SOUND.to_bytes(4, byteorder='big')
 
 		print(f'{str(self)} Playing {small_hash(hash)} for {steamid}')
 
