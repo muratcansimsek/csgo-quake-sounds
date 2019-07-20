@@ -3,6 +3,7 @@ import hashlib
 import os
 import random
 import threading
+from concurrent.futures.thread import ThreadPoolExecutor
 from pydub import AudioSegment  # type: ignore
 from pydub.playback import play  # type: ignore
 from threading import Lock
@@ -41,36 +42,42 @@ class SoundManager:
                 max = max + 1
         return max
 
+    def load(self, filepath: str, file_callback: Callable[[], None]) -> None:
+        """Loads a file (which is quite slow with pydub)."""
+        hash = hashlib.blake2b()
+        with open(filepath, 'rb') as infile:
+            hash.update(infile.read())
+            digest = hash.digest()
+        # This fails :/ loading the file twice instead
+        # sound = AudioSegment.from_file(infile)
+        sound = AudioSegment.from_file(filepath)
+        with self.lock:
+            self.loaded_sounds[digest] = sound
+            self.available_sounds[filepath] = digest.hex()
+        file_callback()
+
     def reload(self, file_callback: Callable[[], None], error_callback: Callable[[str], None]) -> None:
         """Reloads the list of available sounds."""
-        self.lock.acquire(True)
+        with self.lock:
+            self.available_sounds = {}
+            self.loaded_sounds = {}
 
-        self.available_sounds = {}
-        self.loaded_sounds = {}
-        for path in os.listdir('sounds'):
-            for file in os.listdir(os.path.join('sounds', path)):
-                if file.startswith('.git') or file == 'desktop.ini':
-                    continue
-
-                filepath = os.path.join('sounds', path, file)
-                if path == 'Downloaded':
-                    self.available_sounds[filepath] = file
-                else:
-                    if os.stat(filepath).st_size > 2 * 1024 * 1024:
-                        error_callback('File %s is too large (over 2 Mb) and will not be loaded.' % filepath)
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            for path in os.listdir('sounds'):
+                for file in os.listdir(os.path.join('sounds', path)):
+                    if file.startswith('.git') or file == 'desktop.ini':
                         continue
 
-                    hash = hashlib.blake2b()
-                    with open(filepath, 'rb') as infile:
-                        hash.update(infile.read())
-                        digest = hash.digest()
-                        # This fails :/ loading the file twice, whatever
-                        # self.loaded_sounds[digest] = AudioSegment.from_file(infile)
-                    self.available_sounds[filepath] = digest.hex()
-                    self.loaded_sounds[digest] = AudioSegment.from_file(filepath)
-                file_callback()
+                    filepath = os.path.join('sounds', path, file)
+                    if path == 'Downloaded':
+                        with self.lock:
+                            self.available_sounds[filepath] = file
+                    else:
+                        if os.stat(filepath).st_size > 2 * 1024 * 1024:
+                            error_callback('File %s is too large (over 2 Mb) and will not be loaded.' % filepath)
+                            continue
 
-        self.lock.release()
+                        executor.submit(self.load, filepath, file_callback)
 
     def get_random(self, type, state) -> Optional[bytes]:
         """Get a sample from its sound name"""

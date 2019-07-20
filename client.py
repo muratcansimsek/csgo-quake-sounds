@@ -100,10 +100,8 @@ class Client:
 		"""Reloads all sounds. Do not call outside of gui, unless you disable/reenable the update sounds button."""
 		self.loaded_sounds = 0
 		self.max_sounds = self.sounds.max_sounds()
-		wx.CallAfter(self.gui.volumeSlider.Disable)
 		self.sounds.reload(self.file_callback, self.error_callback)
 		wx.CallAfter(self.gui.updateSoundsBtn.Enable)
-		wx.CallAfter(self.gui.volumeSlider.Enable)
 		self.update_status()
 
 		# Send the list of all the sounds we own (except from the ones in the Downloaded folder) to server

@@ -118,8 +118,10 @@ class MainFrame(wx.Frame):
             self.client.sounds.volume = self.volumeSlider.Value
         playpacket = PlaySound()
         playpacket.steamid = 0
-        playpacket.sound_hash = self.client.sounds.get_random(GameEvent.HEADSHOT, None)
-        self.client.sounds.play(playpacket)
+        random_hash = self.client.sounds.get_random(GameEvent.HEADSHOT, None)
+        if random_hash is not None:
+            playpacket.sound_hash = random_hash
+            self.client.sounds.play(playpacket)
 
     def OpenSoundsDir(self, event):
         # TODO linux
