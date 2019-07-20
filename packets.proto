@@ -59,8 +59,8 @@ message ClientUpdate {
 		UNCONNECTED = 1;
 	}
 
-	PlayerStatus status = 1;
-	bytes map = 2;
+	PlayerStatus status = 1; // unused
+	bytes map = 2;           // unused
 	fixed64 steamid = 3;
 	bytes shard_code = 4;
 }

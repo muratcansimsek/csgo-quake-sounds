@@ -36,8 +36,8 @@ class MainFrame(wx.Frame):
 
         vbox = wx.BoxSizer(wx.VERTICAL)
         vbox.AddStretchSpacer()
-        vbox.Add(self.make_volume_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
         vbox.Add(friends_zone, border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
+        vbox.Add(self.make_volume_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
         vbox.Add(self.make_settings_zone(), border=5, flag=wx.ALIGN_CENTER_HORIZONTAL | wx.ALL)
         vbox.AddStretchSpacer()
         self.panel.SetSizer(vbox)
@@ -61,10 +61,10 @@ class MainFrame(wx.Frame):
         return volumeZone
 
     def make_friends_zone(self):
-        shardCodeBtn = wx.Button(self.panel, label="Join room")
-        self.Bind(wx.EVT_BUTTON, self.UpdateShardCode, shardCodeBtn)
+        self.shardCodeBtn = wx.Button(self.panel, label="Join room")
+        self.Bind(wx.EVT_BUTTON, self.JoinOrLeaveRoom, self.shardCodeBtn)
         with config.lock:
-            self.shardCodeIpt = wx.TextCtrl(self.panel, value=config.config['Sounds'].get('Room', ''), size=(164, shardCodeBtn.GetMinSize().GetHeight()))
+            self.shardCodeIpt = wx.TextCtrl(self.panel, value=config.config['Sounds'].get('Room', ''), size=(164, self.shardCodeBtn.GetMinSize().GetHeight()))
         self.shardCodeIpt.SetFocus()
         shardCodeExplanationTxt = wx.StaticText(self.panel, label="In order to hear your teammates' sounds, you\nneed to join the same room.")
 
@@ -72,18 +72,13 @@ class MainFrame(wx.Frame):
         friendsZone.Add(shardCodeExplanationTxt, border=5, flag=wx.LEFT | wx.DOWN)
         friendsInputZone = wx.BoxSizer(wx.HORIZONTAL)
         friendsInputZone.Add(self.shardCodeIpt, border=5, flag=wx.ALIGN_CENTER_VERTICAL | wx.ALL)
-        friendsInputZone.Add(shardCodeBtn, border=5, flag=wx.ALIGN_CENTER_VERTICAL | wx.ALL)
+        friendsInputZone.Add(self.shardCodeBtn, border=5, flag=wx.ALIGN_CENTER_VERTICAL | wx.ALL)
         friendsZone.Add(friendsInputZone)
 
         return friendsZone
     
     def make_settings_zone(self):
         self.preferHeadshotsChk = wx.CheckBox(self.panel, label="Prefer headshot sounds over killstreak sounds")
-        self.downloadWhenAliveChk = wx.CheckBox(self.panel, label="Download custom sounds")
-        self.uploadWhenAliveChk = wx.CheckBox(self.panel, label="Upload custom sounds")
-
-        whenAliveTxt = wx.StaticText(self.panel, label="When alive:")
-        whenAliveWarningTxt = wx.StaticText(self.panel, label="(can impact gameplay on slow connections)")
 
         openSoundDirBtn = wx.Button(self.panel, label="Open sounds directory")
         self.updateSoundsBtn = wx.Button(self.panel, label="Update sounds")
@@ -96,22 +91,12 @@ class MainFrame(wx.Frame):
 
         settingsBox = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Settings")
         settingsBox.Add(self.preferHeadshotsChk, border=5, flag=wx.ALL)
-        settingsBox.Add(whenAliveTxt, border=5, flag=wx.ALL)
-        settingsBox.Add(self.downloadWhenAliveChk, border=15, flag=wx.LEFT)
-        settingsBox.Add(self.uploadWhenAliveChk, border=15, flag=wx.LEFT)
-        settingsBox.Add(whenAliveWarningTxt, border=5, flag=wx.ALL)
         settingsBox.Add(soundBtns, border=5, flag=wx.ALIGN_CENTER | wx.UP | wx.DOWN)
 
         with config.lock:
             preferHeadshots = config.config['Sounds'].getboolean('PreferHeadshots', False)
-            downloadWhenAlive = config.config['Network'].getboolean('DownloadWhenAlive', False)
-            uploadWhenAlive = config.config['Network'].getboolean('UploadWhenAlive', False)
         self.preferHeadshotsChk.SetValue(preferHeadshots)
-        self.downloadWhenAliveChk.SetValue(downloadWhenAlive)
-        self.uploadWhenAliveChk.SetValue(uploadWhenAlive)
         self.Bind(wx.EVT_CHECKBOX, lambda e: config.set('Sounds', 'PreferHeadshots', self.preferHeadshotsChk.Value), self.preferHeadshotsChk)
-        self.Bind(wx.EVT_CHECKBOX, lambda e: config.set('Network', 'DownloadWhenAlive', self.downloadWhenAliveChk.Value), self.downloadWhenAliveChk)
-        self.Bind(wx.EVT_CHECKBOX, lambda e: config.set('Network', 'UploadWhenAlive', self.uploadWhenAliveChk.Value), self.uploadWhenAliveChk)
 
         return settingsBox
 
@@ -140,10 +125,21 @@ class MainFrame(wx.Frame):
         # TODO linux
         subprocess.Popen('explorer "sounds"')
     
-    def UpdateShardCode(self, event):
-        self.client.shard_code = self.shardCodeIpt.GetValue()
-        config.set('Sounds', 'Room', self.shardCodeIpt.GetValue())
-        threading.Thread(target=self.client.client_update, daemon=True).start()
+    def JoinOrLeaveRoom(self, event):
+        # Don't join without a room name
+        if self.shardCodeIpt.GetValue() == '':
+            return
+
+        if self.client.room_name is None:
+            self.client.room_name = self.shardCodeIpt.GetValue()
+            config.set('Sounds', 'Room', self.shardCodeIpt.GetValue())
+            threading.Thread(target=self.client.client_update, daemon=True).start()
+            self.shardCodeIpt.Disable()
+            self.shardCodeBtn.SetLabel('Leave room')
+        else:
+            self.client.room_name = None
+            self.shardCodeIpt.Enable()
+            self.shardCodeBtn.SetLabel('Join room')
     
     def UpdateSounds(self, event):
         self.updateSoundsBtn.Disable()

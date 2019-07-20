@@ -16,7 +16,7 @@ class Client:
 	sock = None
 	connected = False
 	reconnect_timeout = 1
-	shard_code = ''
+	room_name = None
 	downloaded = 0
 	download_total = 0
 	uploaded = 0
@@ -28,7 +28,6 @@ class Client:
 
 	def __init__(self, gui):
 		self.gui = gui
-		self.shard_code = gui.shardCodeIpt.GetValue()
 		self.sounds = SoundManager(self)
 		self.state = CSGOState(self)
 
@@ -56,7 +55,7 @@ class Client:
 		with self.state.lock:
 			if self.state.old_state is not None and self.state.old_state.steamid is not None:
 				packet.steamid = int(self.state.old_state.steamid)
-		packet.shard_code = self.shard_code.encode('utf-8')
+		packet.shard_code = self.room_name.encode('utf-8')
 
 		self.send(PacketInfo.CLIENT_UPDATE, packet)
 
@@ -75,10 +74,10 @@ class Client:
 					phase = ' (%s)' % phase
 				wx.CallAfter(
 					self.gui.SetStatusText,
-					f'Room "{self.shard_code}" - Round {self.state.old_state.current_round}{phase}'
+					f'Room "{self.room_name}" - Round {self.state.old_state.current_round}{phase}'
 				)
 			else:
-				wx.CallAfter(self.gui.SetStatusText, 'Room "%s" - Not in a match.' % self.shard_code)
+				wx.CallAfter(self.gui.SetStatusText, 'Room "%s" - Not in a match.' % self.room_name)
 		
 	def file_callback(self, hash, file):
 		self.sounds.cache[hash] = file
@@ -110,9 +109,6 @@ class Client:
 		self.send(PacketInfo.SOUNDS_LIST, packet)
 
 	def request_sounds(self):
-		if self.state.is_alive() and not self.gui.downloadWhenAliveChk.Value:
-			return
-
 		try:
 			hash = self.sounds_to_download.get(block=False)
 			packet = SoundRequest()
@@ -124,9 +120,6 @@ class Client:
 				self.download_total = 0
 
 	def respond_sounds(self):
-		if self.state.is_alive() and not self.gui.uploadWhenAliveChk.Value:
-			return
-
 		try:
 			hash = self.sounds_to_upload.get(block=False)
 			filepath = os.path.join('cache', hash.hex())
@@ -183,7 +176,21 @@ class Client:
 
 	def listen(self):
 		while True:
+			# No room joined : disconnect and wait
+			if self.room_name is None:
+				if self.connected is True:
+					self.connected = False
+					if self.sock is not None:
+						self.sock.shutdown(socket.SHUT_RDWR)
+				sleep(0.1)
+				continue
+
 			if not self.connected:
+				# Reset packet queue
+				self.packets_to_send = Queue()
+				self.sounds_to_download = LifoQueue()
+				self.sounds_to_upload = LifoQueue()
+
 				try:
 					with config.lock:
 						ip = config.config['Network'].get('ServerIP', 'kiwec.net')
@@ -207,8 +214,9 @@ class Client:
 			try:
 
 				# Let's try SENDING some packets!
-				self.request_sounds()
-				self.respond_sounds()
+				if not self.state.is_alive():
+					self.request_sounds()
+					self.respond_sounds()
 				try:
 					raw_header, raw_packet = self.packets_to_send.get(block=False)
 					self.sock.sendall(raw_header)

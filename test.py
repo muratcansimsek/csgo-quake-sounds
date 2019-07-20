@@ -18,8 +18,6 @@ class DummyGui:
 	"""There's probably a better way to do this..."""
 	def __init__(self):
 		self.updateSoundsBtn = MagicMock(Enabled=True)
-		self.downloadWhenAliveChk = MagicMock(Enabled=True)
-		self.uploadWhenAliveChk = MagicMock(Enabled=True)
 		self.shardCodeIpt = MagicMock(GetValue=lambda : 'shard_code')
 
 	def SetStatusText(self, *args):
@@ -51,7 +49,7 @@ class MockClient(Client):
 
 	def __init__(self, steamid=random.randint(1, 999999999)):
 		self.gui = DummyGui()
-		self.shard_code = 'shard_code'
+		self.room_name = 'shard_code'
 		self.sounds = sounds.SoundManager(self)
 
 		# Mock stuff
