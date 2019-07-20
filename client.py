@@ -1,9 +1,10 @@
 import os
 import socket
-import wx
+import wx  # type: ignore
 from queue import Empty, Queue, LifoQueue
 from time import sleep
 from threading import Thread
+from typing import Optional
 
 import config
 from packets_pb2 import PacketInfo, PlaySound, SoundRequest, SoundResponse, ClientUpdate
@@ -16,17 +17,19 @@ class Client:
 	sock = None
 	connected = False
 	reconnect_timeout = 1
-	room_name = None
+	room_name: Optional[str] = None
 	downloaded = 0
 	download_total = 0
 	uploaded = 0
 	upload_total = 0
+	loaded_sounds = 0
+	max_sounds = 0
 
-	packets_to_send = Queue()
-	sounds_to_download = LifoQueue()
-	sounds_to_upload = LifoQueue()
+	packets_to_send: Queue = Queue()
+	sounds_to_download: LifoQueue = LifoQueue()
+	sounds_to_upload: LifoQueue = LifoQueue()
 
-	def __init__(self, gui):
+	def __init__(self, gui) -> None:
 		self.gui = gui
 		self.sounds = SoundManager(self)
 		self.state = CSGOState(self)
@@ -42,8 +45,11 @@ class Client:
 		# ...And off it goes
 		self.packets_to_send.put([raw_header, raw_packet])
 
-	def client_update(self):
+	def client_update(self) -> None:
 		"""Thread-safe: Send a packet informing the server of our current state."""
+		if self.room_name is None:
+			return
+
 		packet = ClientUpdate()
 
 		# Unused
@@ -78,34 +84,35 @@ class Client:
 				)
 			else:
 				wx.CallAfter(self.gui.SetStatusText, 'Room "%s" - Not in a match.' % self.room_name)
-		
-	def file_callback(self, hash, file):
-		self.sounds.cache[hash] = file
+	
+	def file_callback(self) -> None:
 		self.loaded_sounds = self.loaded_sounds + 1
 		wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.loaded_sounds, self.max_sounds))
-	
-	def error_callback(self, msg):
+
+	def error_callback(self, msg: str) -> None:
+		self.loaded_sounds = self.loaded_sounds + 1
 		dialog = wx.GenericMessageDialog(
 			self.gui, message=msg, caption='Sound loading error', style=wx.OK | wx.ICON_ERROR
 		)
 		wx.CallAfter(dialog.ShowModal)
 	
-	def reload_sounds(self):
-		"""Reloads all sounds. Not thread safe, should only be called from GUI"""
+	def reload_sounds(self) -> None:
+		"""Reloads all sounds. Do not call outside of gui, unless you disable/reenable the update sounds button."""
 		self.loaded_sounds = 0
-		self.max_sounds = len(self.sounds.sound_list('sounds'))
-
-		self.sounds.load(self.file_callback, self.error_callback)
+		self.max_sounds = self.sounds.max_sounds()
+		wx.CallAfter(self.gui.volumeSlider.Disable)
+		self.sounds.reload(self.file_callback, self.error_callback)
 		wx.CallAfter(self.gui.updateSoundsBtn.Enable)
+		wx.CallAfter(self.gui.volumeSlider.Enable)
 		self.update_status()
 
-		# Send sound list to server
-		if not self.connected:
-			return
+		# Send the list of all the sounds we own (except from the ones in the Downloaded folder) to server
 		packet = SoundRequest()
-		with self.sounds.cache_lock:
-			for hash in self.sounds.cache:
-				packet.sound_hash.append(hash)
+		download_folder = os.path.join('sounds', 'Downloaded')
+		with self.sounds.lock:
+			available_sounds = self.sounds.available_sounds.items()
+		personal_sounds = [bytes.fromhex(v) for k, v in available_sounds if not k.startswith(download_folder)]
+		packet.sound_hash.extend(personal_sounds)
 		self.send(PacketInfo.SOUNDS_LIST, packet)
 
 	def request_sounds(self):
@@ -119,21 +126,24 @@ class Client:
 				self.update_status()
 				self.download_total = 0
 
-	def respond_sounds(self):
+	def respond_sounds(self) -> None:
 		try:
 			hash = self.sounds_to_upload.get(block=False)
-			filepath = os.path.join('cache', hash.hex())
-			with open(filepath, 'rb') as infile:
-				packet = SoundResponse()
-				packet.data = infile.read()
-				packet.hash = hash
-				self.send(PacketInfo.SOUND_RESPONSE, packet)
+			with self.sounds.lock:
+				for filepath, filehash in self.sounds.available_sounds.items():
+					if filehash == hash:
+						with open(filepath, 'rb') as infile:
+							packet = SoundResponse()
+							packet.data = infile.read()
+						packet.hash = hash
+						self.send(PacketInfo.SOUND_RESPONSE, packet)
+						return
 		except Empty:
 			if self.upload_total != 0:
 				self.update_status()
 				self.upload_total = 0
 
-	def handle(self, packet_type, raw_packet):
+	def handle(self, packet_type, raw_packet) -> None:
 		print('Received %s packet' % PacketInfo.Type.Name(packet_type))
 
 		if packet_type == PacketInfo.PLAY_SOUND and self.state.is_ingame():
@@ -153,19 +163,16 @@ class Client:
 			packet = SoundResponse()
 			packet.ParseFromString(raw_packet)
 			self.sounds.save(packet)
-			self.sounds.play_received(packet.hash)
 		elif packet_type == PacketInfo.SOUNDS_LIST:
 			packet = SoundRequest()
 			packet.ParseFromString(raw_packet)
 
-			download_list = []
-			with self.sounds.cache_lock:
-				for hash in packet.sound_hash:
-					if hash not in self.sounds.cache:
-						download_list.append(hash)
-			self.download_total += len(download_list)
-			for hash in download_list:
-				self.sounds_to_download.put(hash)
+			with self.sounds.lock:
+				available_sounds = self.sounds.available_sounds.values()
+			for hash in packet.sound_hash:
+				if hash.hex() not in available_sounds:
+					self.sounds_to_download.put(hash)
+					self.download_total = self.download_total + 1
 		else:
 			print("Unhandled packet type!")
 

@@ -52,7 +52,7 @@ class MainFrame(wx.Frame):
         self.Show()
     
     def make_volume_zone(self):
-        with self.client.sounds.cache_lock:
+        with self.client.sounds.lock:
             self.volumeSlider = wx.Slider(self.panel, value=self.client.sounds.volume, size=(272, 25))
         self.Bind(wx.EVT_COMMAND_SCROLL_CHANGED, self.OnVolumeSlider, self.volumeSlider)
 
@@ -111,14 +111,14 @@ class MainFrame(wx.Frame):
 
     def OnVolumeSlider(self, event):
         config.set('Sounds', 'Volume', self.volumeSlider.Value)
-        with self.client.sounds.cache_lock:
+        with self.client.sounds.lock:
             # Volume didn't change
             if self.client.sounds.volume == self.volumeSlider.Value:
                 return
             self.client.sounds.volume = self.volumeSlider.Value
-            playpacket = PlaySound()
-            playpacket.steamid = 0
-            playpacket.sound_hash = self.client.sounds.get_random(GameEvent.HEADSHOT, None)
+        playpacket = PlaySound()
+        playpacket.steamid = 0
+        playpacket.sound_hash = self.client.sounds.get_random(GameEvent.HEADSHOT, None)
         self.client.sounds.play(playpacket)
 
     def OpenSoundsDir(self, event):
