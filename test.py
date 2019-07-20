@@ -1,3 +1,4 @@
+import hashlib
 import os
 import random
 import shutil
@@ -5,6 +6,7 @@ import threading
 import unittest
 from time import sleep
 from unittest.mock import patch, MagicMock, Mock
+from typing import Callable
 
 import sounds
 import server
@@ -43,6 +45,20 @@ class MockState(CSGOState):
 		self.old_state = PlayerState(steamid)
 		self.client = client
 
+	def is_alive(self) -> bool:
+		return False  # always download/upload sounds
+
+
+class MockSoundManager(sounds.SoundManager):
+	def load(self, filepath: str, file_callback: Callable[[], None]) -> None:
+		hash = hashlib.blake2b()
+		with open(filepath, 'rb') as infile:
+			hash.update(infile.read())
+			digest = hash.digest()
+		with self.lock:
+			self.available_sounds[filepath] = digest.hex()
+		file_callback()
+
 
 class MockClient(Client):
 	"""Simpler client for testing."""
@@ -50,7 +66,7 @@ class MockClient(Client):
 	def __init__(self, steamid=random.randint(1, 999999999)):
 		self.gui = DummyGui()
 		self.room_name = 'shard_code'
-		self.sounds = sounds.SoundManager(self)
+		self.sounds = MockSoundManager(self)
 
 		# Mock stuff
 		self.sounds.play = Mock()
@@ -92,45 +108,44 @@ class TestClient(unittest.TestCase):
 		except:
 			pass
 
-	#@patch('util.unsafe_print')  # Feel free to comment this for easier debugging
 	@patch('wx.CallAfter')
 	def test_receive_sound(self, *args):
 		# Alice will send basic stuff
 		alice = MockClient('123123123')
-		self.assertEqual(alice.sounds.play.call_count, 1)
 		sleep(10)
+		self.assertEqual(alice.sounds.play.call_count, 0)
 
 		# Bob will only receive
 		bob = MockClient('456456456')
-		self.assertEqual(bob.sounds.play.call_count, 1)
-		sleep(0.1)
+		sleep(1)
+		self.assertEqual(bob.sounds.play.call_count, 0)
 
 		# Charlie will send a custom sound
 		shutil.move('test.ogg', 'sounds/Timeout/test.ogg')
 		charlie = MockClient('789789789')
-		sleep(0.1)
+		sleep(1)
 
 		with self.server.clients_lock:
 			self.assertEqual(len(self.server.clients), 3)
 
 		# Send a sound, and assert it is received by bob
 		alice.sounds.send(GameEvent.COLLATERAL, alice.state)
-		sleep(0.1)
-		self.assertEqual(bob.sounds.play.call_count, 2)
+		sleep(1)
+		self.assertEqual(bob.sounds.play.call_count, 1)
 
 		# Try MVPs
 		alice.sounds.send(GameEvent.MVP, alice.state)
-		sleep(0.1)
-		self.assertEqual(bob.sounds.play.call_count, 3)
+		sleep(1)
+		self.assertEqual(bob.sounds.play.call_count, 2)
 		alice.state.current_round = 2
 		alice.sounds.send(GameEvent.MVP, alice.state)
-		sleep(0.1)
-		self.assertEqual(bob.sounds.play.call_count, 4)
+		sleep(1)
+		self.assertEqual(bob.sounds.play.call_count, 3)
 
 		# Try charlie's custom sound
 		charlie.sounds.send(GameEvent.TIMEOUT, charlie.state)
 		sleep(2)
-		self.assertEqual(bob.sounds.play.call_count, 5)
+		self.assertEqual(bob.sounds.play.call_count, 4)
 
 if __name__ == '__main__':
 	unittest.main()

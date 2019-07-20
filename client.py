@@ -122,16 +122,19 @@ class Client:
 
 	def respond_sounds(self) -> None:
 		try:
-			hash = self.sounds_to_upload.get(block=False)
+			packet = SoundResponse()
+			packet.hash = self.sounds_to_upload.get(block=False)
+			hash = packet.hash.hex()
+			sound_filepath: Optional[str] = None
 			with self.sounds.lock:
 				for filepath, filehash in self.sounds.available_sounds.items():
 					if filehash == hash:
-						with open(filepath, 'rb') as infile:
-							packet = SoundResponse()
-							packet.data = infile.read()
-						packet.hash = hash
-						self.send(PacketInfo.SOUND_RESPONSE, packet)
-						return
+						sound_filepath = filepath
+						break
+			if sound_filepath is not None:
+				with open(filepath, 'rb') as infile:
+					packet.data = infile.read()
+				self.send(PacketInfo.SOUND_RESPONSE, packet)
 		except Empty:
 			if self.upload_total != 0:
 				self.update_status()
