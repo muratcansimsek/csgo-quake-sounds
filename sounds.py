@@ -4,8 +4,8 @@ import os
 import random
 import threading
 from concurrent.futures.thread import ThreadPoolExecutor
-from pydub import AudioSegment  # type: ignore
-from pydub.playback import play  # type: ignore
+from openal import oalGetListener, AL_PLAYING, PYOGG_AVAIL, Buffer, OpusFile, Source  # type: ignore
+from time import sleep
 from threading import Lock
 from typing import Callable, Dict, List, Optional
 
@@ -25,7 +25,7 @@ class SoundManager:
         self.available_sounds: Dict[str, str] = {}
 
         # List of loaded sounds (hash:sound dict)
-        self.loaded_sounds: Dict[bytes, AudioSegment] = {}
+        self.loaded_sounds: Dict[bytes, Buffer] = {}
 
         with config.lock:
             self.volume = config.config['Sounds'].getint('Volume', 50)
@@ -43,18 +43,23 @@ class SoundManager:
         return max
 
     def load(self, filepath: str, file_callback: Callable[[], None]) -> None:
-        """Loads a file (which is quite slow with pydub)."""
+        self.load_sync(filepath)
+        file_callback()
+
+    def load_sync(self, filepath: str) -> Optional[Buffer]:
         hash = hashlib.blake2b()
         with open(filepath, 'rb') as infile:
             hash.update(infile.read())
             digest = hash.digest()
-        # This fails :/ loading the file twice instead
-        # sound = AudioSegment.from_file(infile)
-        sound = AudioSegment.from_file(filepath)
+
+        # Can't load files - TODO show error & quit
+        if not PYOGG_AVAIL:
+            return None
+
         with self.lock:
-            self.loaded_sounds[digest] = sound
+            self.loaded_sounds[digest] = Buffer(OpusFile(filepath))
             self.available_sounds[filepath] = digest.hex()
-        file_callback()
+            return self.loaded_sounds[digest]
 
     def reload(self, file_callback: Callable[[], None], error_callback: Callable[[str], None]) -> None:
         """Reloads the list of available sounds."""
@@ -104,9 +109,18 @@ class SoundManager:
         print(f'[!] No available samples for action "{sound}".')
         return None
 
-    def _play(self, sound, gain) -> None:
+    def _play(self, sound) -> None:
         """Play sound from its file path. Blocking call."""
-        play(sound.apply_gain(gain))
+        sound = Source(sound)
+        # gain can be between 0.0 and 2.0 with the GUI's volume slider
+        with self.lock:
+            gain: float = 0.0 if self.volume == 0 else self.volume / 50.0
+            sound.set_gain(gain)
+        sound.play()
+
+        while sound.get_state() == AL_PLAYING:
+            # Don't end the thread until the sound finished playing
+            sleep(1)
 
     def play(self, packet: PlaySound) -> bool:
         """Tries playing a sound from a PlaySound packet.
@@ -117,25 +131,19 @@ class SoundManager:
             return True
 
         with self.lock:
-            # 0 = -10db ; 50 = +0db ; 100 = +10db
-            gain: float = self.volume - 50
-            if gain != 0:
-                gain = gain / 5
-
-            sound: Optional[AudioSegment] = None
+            sound: Optional[Buffer] = None
             try:
                 sound = self.loaded_sounds[packet.sound_hash]
             except KeyError:
                 filepath = os.path.join('sounds', 'Downloaded', packet.sound_hash.hex())
                 if filepath in self.available_sounds.keys():
-                    sound = AudioSegment.from_file(filepath)
-                    self.loaded_sounds[packet.sound_hash] = sound
+                    sound = self.load_sync(filepath)
 
             if sound is None:
                 print(f'[!] Sound {small_hash(packet.sound_hash)} not found.')
                 return False
             else:
-                threading.Thread(target=self._play, args=(sound, gain,), daemon=True).start()
+                threading.Thread(target=self._play, args=(sound,), daemon=True).start()
                 return True
 
     def save(self, packet: SoundResponse) -> None:
@@ -153,7 +161,7 @@ class SoundManager:
             return
 
         hash = self.get_random(update_type, state)
-        if hash != None:
+        if hash is not None:
             packet = GameEvent()
             packet.update = update_type
             packet.proposed_sound_hash = hash

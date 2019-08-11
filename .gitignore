@@ -4,7 +4,7 @@ venv
 .vscode
 
 build/
-avbin64.dll
+*.dll
 
 cache/*
 !cache/.gitkeep

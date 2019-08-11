@@ -1,6 +1,6 @@
 pathlib2~=2.3
 wxPython~=4.0
-pydub~=0.23
-simpleaudio~=1.0
 protobuf~=3.9
+PyOgg~=0.6
+PyOpenAL~=0.7
 git+git://github.com/leovp/steamfiles.git@master

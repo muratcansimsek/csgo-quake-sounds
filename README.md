@@ -1,6 +1,6 @@
 # csgo-quake-sounds
 
-Plays quake sounds in Counter-Strike : Global Offensive matches with Gamestate Integration.
+Custom sounds in your Counter-Strike : Global Offensive matches.
 
 [Download](https://github.com/kiwec/csgo-quake-sounds/releases/latest)
 
@@ -8,25 +8,23 @@ Plays quake sounds in Counter-Strike : Global Offensive matches with Gamestate I
 
 * Will I get banned for using this ?
 
-No.
+No. This is using [Game State Integration](https://developer.valvesoftware.com/wiki/Counter-Strike:_Global_Offensive_Game_State_Integration), which is allowed by Valve.
 
 * Does it work in matchmaking ? On faceit ?
 
 Yes.
 
-* Can I add my own sounds ?
+* How do I add my own sounds ?
 
-Yes. Feel free to remove the ones you don't like, too.
+Yes. Just drop them in the corresponding `sounds` folder.
 
-* What's this networking stuff ?
+As of right now, only OPUS files are supported. More formats will come soon.
 
-If you play with friends, sounds will be shared when spectating, or on certain rare events.
-
-This allows everyone to use their own custom sounds, without hearing different sounds.
+Feel free to remove the ones you don't like, too.
 
 ### Running
 
-Most of the time, you would want to use the [installer](https://github.com/kiwec/csgo-quake-sounds/releases/latest).
+You probably want to use the [installer](https://github.com/kiwec/csgo-quake-sounds/releases/latest).
 
 However, if you want to try the latest version or host your own server, follow the instructions in [RUNNING.md](https://github.com/kiwec/csgo-quake-sounds/blob/master/RUNNING.md).
 

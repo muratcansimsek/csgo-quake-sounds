@@ -113,12 +113,12 @@ class TestClient(unittest.TestCase):
 		# Alice will send basic stuff
 		alice = MockClient('123123123')
 		sleep(10)
-		self.assertEqual(alice.sounds.play.call_count, 0)
+		self.assertEqual(alice.sounds.play.call_count, 1)
 
 		# Bob will only receive
 		bob = MockClient('456456456')
 		sleep(1)
-		self.assertEqual(bob.sounds.play.call_count, 0)
+		self.assertEqual(bob.sounds.play.call_count, 1)
 
 		# Charlie will send a custom sound
 		shutil.move('test.ogg', 'sounds/Timeout/test.ogg')
@@ -131,21 +131,21 @@ class TestClient(unittest.TestCase):
 		# Send a sound, and assert it is received by bob
 		alice.sounds.send(GameEvent.COLLATERAL, alice.state)
 		sleep(1)
-		self.assertEqual(bob.sounds.play.call_count, 1)
+		self.assertEqual(bob.sounds.play.call_count, 2)
 
 		# Try MVPs
 		alice.sounds.send(GameEvent.MVP, alice.state)
 		sleep(1)
-		self.assertEqual(bob.sounds.play.call_count, 2)
+		self.assertEqual(bob.sounds.play.call_count, 3)
 		alice.state.current_round = 2
 		alice.sounds.send(GameEvent.MVP, alice.state)
 		sleep(1)
-		self.assertEqual(bob.sounds.play.call_count, 3)
+		self.assertEqual(bob.sounds.play.call_count, 4)
 
 		# Try charlie's custom sound
 		charlie.sounds.send(GameEvent.TIMEOUT, charlie.state)
 		sleep(2)
-		self.assertEqual(bob.sounds.play.call_count, 4)
+		self.assertEqual(bob.sounds.play.call_count, 5)
 
 if __name__ == '__main__':
 	unittest.main()

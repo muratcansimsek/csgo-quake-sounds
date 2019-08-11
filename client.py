@@ -7,7 +7,7 @@ from threading import Thread
 from typing import Optional
 
 import config
-from packets_pb2 import PacketInfo, PlaySound, SoundRequest, SoundResponse, ClientUpdate
+from packets_pb2 import GameEvent, PacketInfo, PlaySound, SoundRequest, SoundResponse, ClientUpdate
 from sounds import SoundManager
 from state import CSGOState
 from util import print
@@ -108,6 +108,14 @@ class Client:
 		personal_sounds = [bytes.fromhex(v) for k, v in available_sounds if not k.startswith(download_folder)]
 		packet.sound_hash.extend(personal_sounds)
 		self.send(PacketInfo.SOUNDS_LIST, packet)
+
+		# Play round start sound
+		playpacket = PlaySound()
+		playpacket.steamid = 0
+		random_hash = self.sounds.get_random(GameEvent.ROUND_START, None)
+		if random_hash is not None:
+			playpacket.sound_hash = random_hash
+			self.sounds.play(playpacket)
 
 	def request_sounds(self):
 		try:
