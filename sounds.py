@@ -4,13 +4,13 @@ import os
 import random
 import threading
 from concurrent.futures.thread import ThreadPoolExecutor
-from openal import oalGetListener, AL_PLAYING, PYOGG_AVAIL, Buffer, OpusFile, Source  # type: ignore
+from openal import AL_PLAYING, PYOGG_AVAIL, Buffer, OpusFile, Source  # type: ignore
 from time import sleep
 from threading import Lock
 from typing import Callable, Dict, List, Optional
 
 import config
-from packets_pb2 import GameEvent, PacketInfo, PlaySound, SoundResponse
+from protocol import GameEvent, PlaySound, SoundResponse
 from util import print, get_event_class, small_hash
 
 
@@ -26,6 +26,8 @@ class SoundManager:
 
         # List of loaded sounds (hash:sound dict)
         self.loaded_sounds: Dict[bytes, Buffer] = {}
+
+        self.personal_sounds: List[bytes] = []
 
         with config.lock:
             self.volume = config.config['Sounds'].getint('Volume', 50)
@@ -86,19 +88,19 @@ class SoundManager:
 
     def get_random(self, type, state) -> Optional[bytes]:
         """Get a sample from its sound name"""
-        if type == GameEvent.MVP: sound = 'MVP'
-        elif type == GameEvent.ROUND_WIN: sound = 'Round win'
-        elif type == GameEvent.ROUND_LOSE: sound = 'Round lose'
-        elif type == GameEvent.SUICIDE: sound = 'Suicide'
-        elif type == GameEvent.TEAMKILL: sound = 'Teamkill'
-        elif type == GameEvent.DEATH: sound = 'Death'
-        elif type == GameEvent.FLASH: sound = 'Flashed'
-        elif type == GameEvent.KNIFE: sound = 'Unusual kill'
-        elif type == GameEvent.HEADSHOT: sound = 'Headshot'
-        elif type == GameEvent.KILL: sound = '%d kills' % state.round_kills
-        elif type == GameEvent.COLLATERAL: sound = 'Collateral'
-        elif type == GameEvent.ROUND_START: sound = 'Round start'
-        elif type == GameEvent.TIMEOUT: sound = 'Timeout'
+        if type == GameEvent.Type.MVP: sound = 'MVP'
+        elif type == GameEvent.Type.ROUND_WIN: sound = 'Round win'
+        elif type == GameEvent.Type.ROUND_LOSE: sound = 'Round lose'
+        elif type == GameEvent.Type.SUICIDE: sound = 'Suicide'
+        elif type == GameEvent.Type.TEAMKILL: sound = 'Teamkill'
+        elif type == GameEvent.Type.DEATH: sound = 'Death'
+        elif type == GameEvent.Type.FLASH: sound = 'Flashed'
+        elif type == GameEvent.Type.KNIFE: sound = 'Unusual kill'
+        elif type == GameEvent.Type.HEADSHOT: sound = 'Headshot'
+        elif type == GameEvent.Type.KILL: sound = '%d kills' % state.round_kills
+        elif type == GameEvent.Type.COLLATERAL: sound = 'Collateral'
+        elif type == GameEvent.Type.ROUND_START: sound = 'Round start'
+        elif type == GameEvent.Type.TIMEOUT: sound = 'Timeout'
 
         with self.lock:
             sounds = self.available_sounds.items()
@@ -167,7 +169,7 @@ class SoundManager:
             packet.proposed_sound_hash = hash
             packet.kill_count = int(state.round_kills)
             packet.round = int(state.current_round)
-            self.client.send(PacketInfo.GAME_EVENT, packet)
+            self.client.send(packet)
 
             # Normal event : play without waiting for server
             if get_event_class(packet) == 'normal':

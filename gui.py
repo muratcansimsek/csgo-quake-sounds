@@ -1,11 +1,12 @@
 import subprocess
+import time
 import threading
 import wx
 import wx.adv
 
 import client
 import config
-from packets_pb2 import GameEvent, PlaySound
+from protocol import GameEvent, PlaySound
 
 
 class TaskbarIcon(wx.adv.TaskBarIcon):
@@ -50,6 +51,8 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Centre()
         self.Show()
+
+        self.JoinOrLeaveRoom(None)
     
     def make_volume_zone(self):
         with self.client.sounds.lock:
@@ -118,7 +121,7 @@ class MainFrame(wx.Frame):
             self.client.sounds.volume = self.volumeSlider.Value
         playpacket = PlaySound()
         playpacket.steamid = 0
-        random_hash = self.client.sounds.get_random(GameEvent.HEADSHOT, None)
+        random_hash = self.client.sounds.get_random(GameEvent.Type.HEADSHOT, None)
         if random_hash is not None:
             playpacket.sound_hash = random_hash
             self.client.sounds.play(playpacket)
@@ -138,6 +141,13 @@ class MainFrame(wx.Frame):
             threading.Thread(target=self.client.client_update, daemon=True).start()
             self.shardCodeIpt.Disable()
             self.shardCodeBtn.SetLabel('Leave room')
+            self.shardCodeBtn.Disable()
+
+            def reenable_btn():
+                time.sleep(1)
+                self.shardCodeBtn.Enable()
+
+            threading.Thread(target=reenable_btn, daemon=True).start()
         else:
             self.client.room_name = None
             self.shardCodeIpt.Enable()

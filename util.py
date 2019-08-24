@@ -1,9 +1,13 @@
 from threading import Lock
 
-from packets_pb2 import GameEvent
+from protocol import GameEvent
 
-rare_events = [ GameEvent.MVP, GameEvent.SUICIDE, GameEvent.TEAMKILL, GameEvent.KNIFE, GameEvent.COLLATERAL ]
-shared_events = [ GameEvent.ROUND_WIN, GameEvent.ROUND_LOSE, GameEvent.ROUND_START, GameEvent.TIMEOUT ]
+rare_events = [
+	GameEvent.Type.MVP, GameEvent.Type.SUICIDE, GameEvent.Type.TEAMKILL, GameEvent.Type.KNIFE, GameEvent.Type.COLLATERAL
+]
+shared_events = [
+	GameEvent.Type.ROUND_WIN, GameEvent.Type.ROUND_LOSE, GameEvent.Type.ROUND_START, GameEvent.Type.TIMEOUT
+]
 
 # Thread-safe printing
 print_lock = Lock()
@@ -13,9 +17,10 @@ def print(*a, **b):
 		unsafe_print(*a, **b)
 
 def get_event_class(packet):
-    if packet.update in rare_events: return 'rare'
-    if packet.update in shared_events: return 'shared'
-    if packet.kill_count > 3 and (packet.update == GameEvent.KILL or packet.update == GameEvent.HEADSHOT): return 'rare'
+    if packet.type in rare_events: return 'rare'
+    if packet.type in shared_events: return 'shared'
+    is_kill = (packet.type == GameEvent.KILL or packet.type == GameEvent.HEADSHOT)
+    if is_kill and packet.kill_count > 3: return 'rare'
     return 'normal'
 
 def small_hash(hash):

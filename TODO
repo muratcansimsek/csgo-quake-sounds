@@ -1,7 +1,0 @@
-- Make release executable
-- Variable sound pitch
-- Client: Don't request sounds when sounds are not loaded
-  - Or, server : ignore sound request before sounds list
-
-Bonus:
-- Encrypted connection

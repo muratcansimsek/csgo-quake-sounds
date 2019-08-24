@@ -1,6 +1,6 @@
 pathlib2~=2.3
 wxPython~=4.0
-protobuf~=3.9
-PyOgg~=0.6
-PyOpenAL~=0.7
+packel~=1.0
+PyOgg==0.6.11a1
+PyOpenAL==0.7.6a1
 git+git://github.com/leovp/steamfiles.git@master
