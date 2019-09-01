@@ -1,8 +1,8 @@
+import asyncio
 import subprocess
-import time
-import threading
 import wx
 import wx.adv
+from wxasync import AsyncBind, StartCoroutine
 
 import client
 import config
@@ -30,7 +30,6 @@ class MainFrame(wx.Frame):
         # Client needs self.shardCodeIpt
         friends_zone = self.make_friends_zone()
 
-        # Start threads
         self.CreateStatusBar()
         self.SetStatusText("Loading sounds...")
         self.client = client.Client(self)
@@ -43,21 +42,21 @@ class MainFrame(wx.Frame):
         vbox.AddStretchSpacer()
         self.panel.SetSizer(vbox)
         self.panel.Layout()
-        self.UpdateSounds(None)
 
         self.taskbarIcon = TaskbarIcon(self)
-        self.Bind(wx.EVT_ICONIZE, self.OnMinimize)
-        self.Bind(wx.EVT_SHOW, self.OnUnMinimize)
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        AsyncBind(wx.EVT_ICONIZE, self.OnMinimize, self)
+        AsyncBind(wx.EVT_SHOW, self.OnUnMinimize, self)
+        AsyncBind(wx.EVT_CLOSE, self.OnClose, self)
         self.Centre()
         self.Show()
 
-        self.JoinOrLeaveRoom(None)
+        StartCoroutine(self.UpdateSounds(None), self)
+        StartCoroutine(self.JoinOrLeaveRoom(None), self)
     
     def make_volume_zone(self):
         with self.client.sounds.lock:
             self.volumeSlider = wx.Slider(self.panel, value=self.client.sounds.volume, size=(272, 25))
-        self.Bind(wx.EVT_COMMAND_SCROLL_CHANGED, self.OnVolumeSlider, self.volumeSlider)
+        AsyncBind(wx.EVT_COMMAND_SCROLL_CHANGED, self.OnVolumeSlider, self.volumeSlider)
 
         volumeZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Volume")
         volumeZone.Add(self.volumeSlider)
@@ -65,11 +64,17 @@ class MainFrame(wx.Frame):
 
     def make_friends_zone(self):
         self.shardCodeBtn = wx.Button(self.panel, label="Join room")
-        self.Bind(wx.EVT_BUTTON, self.JoinOrLeaveRoom, self.shardCodeBtn)
-        with config.lock:
-            self.shardCodeIpt = wx.TextCtrl(self.panel, value=config.config['Sounds'].get('Room', ''), size=(164, self.shardCodeBtn.GetMinSize().GetHeight()))
+        AsyncBind(wx.EVT_BUTTON, self.JoinOrLeaveRoom, self.shardCodeBtn)
+        self.shardCodeIpt = wx.TextCtrl(
+            self.panel,
+            value=config.config['Sounds'].get('Room', ''),
+            size=(164, self.shardCodeBtn.GetMinSize().GetHeight())
+        )
         self.shardCodeIpt.SetFocus()
-        shardCodeExplanationTxt = wx.StaticText(self.panel, label="In order to hear your teammates' sounds, you\nneed to join the same room.")
+        shardCodeExplanationTxt = wx.StaticText(
+            self.panel,
+            label="In order to hear your teammates' sounds, you\nneed to join the same room."
+        )
 
         friendsZone = wx.StaticBoxSizer(wx.VERTICAL, self.panel, label="Room")
         friendsZone.Add(shardCodeExplanationTxt, border=5, flag=wx.LEFT | wx.DOWN)
@@ -85,8 +90,8 @@ class MainFrame(wx.Frame):
 
         openSoundDirBtn = wx.Button(self.panel, label="Open sounds directory")
         self.updateSoundsBtn = wx.Button(self.panel, label="Update sounds")
-        self.Bind(wx.EVT_BUTTON, self.OpenSoundsDir, openSoundDirBtn)
-        self.Bind(wx.EVT_BUTTON, self.UpdateSounds, self.updateSoundsBtn)
+        AsyncBind(wx.EVT_BUTTON, self.OpenSoundsDir, openSoundDirBtn)
+        AsyncBind(wx.EVT_BUTTON, self.UpdateSounds, self.updateSoundsBtn)
 
         soundBtns = wx.BoxSizer(wx.HORIZONTAL)
         soundBtns.Add(openSoundDirBtn)
@@ -96,10 +101,13 @@ class MainFrame(wx.Frame):
         settingsBox.Add(self.preferHeadshotsChk, border=5, flag=wx.ALL)
         settingsBox.Add(soundBtns, border=5, flag=wx.ALIGN_CENTER | wx.UP | wx.DOWN)
 
-        with config.lock:
-            preferHeadshots = config.config['Sounds'].getboolean('PreferHeadshots', False)
+        preferHeadshots = config.config['Sounds'].getboolean('PreferHeadshots', False)
         self.preferHeadshotsChk.SetValue(preferHeadshots)
-        self.Bind(wx.EVT_CHECKBOX, lambda e: config.set('Sounds', 'PreferHeadshots', self.preferHeadshotsChk.Value), self.preferHeadshotsChk)
+        self.Bind(
+            wx.EVT_CHECKBOX,
+            lambda e: config.set('Sounds', 'PreferHeadshots', self.preferHeadshotsChk.Value),
+            self.preferHeadshotsChk
+        )
 
         return settingsBox
 
@@ -109,10 +117,10 @@ class MainFrame(wx.Frame):
             return
         super().SetStatusText(text)
 
-    def OnUnMinimize(self, event):
-        threading.Thread(target=self.client.update_status, daemon=True).start()
+    async def OnUnMinimize(self, event):
+        await self.client.update_status()
 
-    def OnVolumeSlider(self, event):
+    async def OnVolumeSlider(self, event):
         config.set('Sounds', 'Volume', self.volumeSlider.Value)
         with self.client.sounds.lock:
             # Volume didn't change
@@ -126,11 +134,11 @@ class MainFrame(wx.Frame):
             playpacket.sound_hash = random_hash
             self.client.sounds.play(playpacket)
 
-    def OpenSoundsDir(self, event):
+    async def OpenSoundsDir(self, event):
         # TODO linux
         subprocess.Popen('explorer "sounds"')
     
-    def JoinOrLeaveRoom(self, event):
+    async def JoinOrLeaveRoom(self, event):
         # Don't join without a room name
         if self.shardCodeIpt.GetValue() == '':
             return
@@ -138,29 +146,25 @@ class MainFrame(wx.Frame):
         if self.client.room_name is None:
             self.client.room_name = self.shardCodeIpt.GetValue()
             config.set('Sounds', 'Room', self.shardCodeIpt.GetValue())
-            threading.Thread(target=self.client.client_update, daemon=True).start()
+            await self.client.client_update()
             self.shardCodeIpt.Disable()
             self.shardCodeBtn.SetLabel('Leave room')
             self.shardCodeBtn.Disable()
-
-            def reenable_btn():
-                time.sleep(1)
-                self.shardCodeBtn.Enable()
-
-            threading.Thread(target=reenable_btn, daemon=True).start()
+            await asyncio.sleep(1)
+            self.shardCodeBtn.Enable()
         else:
             self.client.room_name = None
             self.shardCodeIpt.Enable()
             self.shardCodeBtn.SetLabel('Join room')
     
-    def UpdateSounds(self, event):
+    async def UpdateSounds(self, event):
         self.updateSoundsBtn.Disable()
-        threading.Thread(target=self.client.reload_sounds, daemon=True).start()
+        StartCoroutine(self.client.reload_sounds, self)
 
-    def OnMinimize(self, event):
+    async def OnMinimize(self, event):
         if self.IsIconized():
             self.Hide()
     
-    def OnClose(self, event):
+    async def OnClose(self, event):
         self.taskbarIcon.Destroy()
         self.Destroy()

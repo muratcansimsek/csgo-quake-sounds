@@ -1,11 +1,10 @@
 import asyncio
 import os
-import wx  # type: ignore
 import packel
+import wx  # type: ignore
 from queue import Empty, Queue, LifoQueue
-from time import sleep
-from threading import Thread
 from typing import Optional
+from wxasync import StartCoroutine
 
 import config
 from protocol import protocol, ClientUpdate, ClientSoundRequest, GameEvent, PlaySound, SoundResponse, ServerRoomSounds
@@ -22,8 +21,6 @@ class Client:
 	download_total = 0
 	uploaded = 0
 	upload_total = 0
-	loaded_sounds = 0
-	max_sounds = 0
 	reader = None
 	writer = None
 
@@ -35,15 +32,13 @@ class Client:
 		self.gui = gui
 		self.sounds = SoundManager(self)
 		self.state = CSGOState(self)
-		self.loop = asyncio.new_event_loop()
-
-		Thread(target=self.listen, daemon=True).start()
-		Thread(target=self.keepalive, daemon=True).start()
+		StartCoroutine(self.listen, gui)
+		StartCoroutine(self.keepalive, gui)
 
 	def send(self, packet: packel.Packet):
 		self.packets_to_send.put(packet)
 
-	def client_update(self) -> None:
+	async def client_update(self) -> None:
 		"""Thread-safe: Send a packet informing the server of our current state."""
 		if self.room_name is None:
 			if self.writer is not None and not self.writer.is_closing():
@@ -63,45 +58,29 @@ class Client:
 
 		self.send(packet)
 
-	def update_status(self) -> None:
+	async def update_status(self) -> None:
 		if not self.connected:
-			wx.CallAfter(self.gui.SetStatusText, 'Connecting to sound sync server...')
+			self.gui.SetStatusText('Connecting to sound sync server...')
 			return
 		with self.state.lock:
 			if self.state.old_state == None:
-				wx.CallAfter(self.gui.SetStatusText, 'Waiting for CS:GO...')
+				self.gui.SetStatusText('Waiting for CS:GO...')
 			elif self.state.old_state.is_ingame:
 				phase = self.state.old_state.phase
 				if phase == 'unknown':
 					phase = ''
 				else:
 					phase = ' (%s)' % phase
-				wx.CallAfter(
-					self.gui.SetStatusText,
-					f'Room "{self.room_name}" - Round {self.state.old_state.current_round}{phase}'
-				)
+				self.gui.SetStatusText(f'Room "{self.room_name}" - Round {self.state.old_state.current_round}{phase}')
 			else:
-				wx.CallAfter(self.gui.SetStatusText, 'Room "%s" - Not in a match.' % self.room_name)
-
-	def file_callback(self) -> None:
-		self.loaded_sounds = self.loaded_sounds + 1
-		wx.CallAfter(self.gui.SetStatusText, 'Loading sounds... (%d/%d)' % (self.loaded_sounds, self.max_sounds))
-
-	def error_callback(self, msg: str) -> None:
-		self.loaded_sounds = self.loaded_sounds + 1
-		dialog = wx.GenericMessageDialog(
-			self.gui, message=msg, caption='Sound loading error', style=wx.OK | wx.ICON_ERROR
-		)
-		wx.CallAfter(dialog.ShowModal)
+				self.gui.SetStatusText('Room "%s" - Not in a match.' % self.room_name)
 	
-	def reload_sounds(self) -> None:
-		"""Reloads all sounds. Do not call outside of gui, unless you disable/reenable the update sounds button."""
-		self.loaded_sounds = 0
-		self.max_sounds = self.sounds.max_sounds()
-		self.sounds.reload(self.file_callback, self.error_callback)
-		wx.CallAfter(self.gui.updateSoundsBtn.Enable)
-		self.update_status()
-		self.client_update()
+	async def reload_sounds(self) -> None:
+		"""Reloads all sounds. Do not call outside of gui, unless you disable the update sounds button."""
+		await self.sounds.reload()
+		await self.update_status()
+		await self.client_update()
+		self.gui.updateSoundsBtn.Enable()
 
 		# Play round start sound
 		playpacket = PlaySound()
@@ -111,17 +90,17 @@ class Client:
 			playpacket.sound_hash = random_hash
 			self.sounds.play(playpacket)
 
-	def request_sounds(self):
+	async def request_sounds(self):
 		try:
 			hash = self.sounds_to_download.get(block=False)
 			if hash not in self.sounds.available_sounds.values():
 				self.send(ClientSoundRequest(sound_hash=hash))
 		except Empty:
 			if self.download_total != 0:
-				self.update_status()
+				await self.update_status()
 				self.download_total = 0
 
-	def respond_sounds(self) -> None:
+	async def respond_sounds(self) -> None:
 		try:
 			packet = SoundResponse()
 			packet.hash = self.sounds_to_upload.get(block=False)
@@ -138,7 +117,7 @@ class Client:
 				self.send(packet)
 		except Empty:
 			if self.upload_total != 0:
-				self.update_status()
+				await self.update_status()
 				self.upload_total = 0
 
 	def handle(self, packet) -> None:
@@ -165,15 +144,15 @@ class Client:
 				self.upload_total += 1
 		elif isinstance(packet, SoundResponse):
 			# Give some feedback about download status
-			wx.CallAfter(self.gui.SetStatusText, f"Downloading sound {self.downloaded + 1}/{self.download_total}...")
+			self.gui.SetStatusText(f"Downloading sound {self.downloaded + 1}/{self.download_total}...")
 			self.sounds.save(packet)
 		else:
 			print("Unhandled packet type!")
 
-	def keepalive(self):
+	async def keepalive(self):
 		while True:
-			self.client_update()
-			sleep(10)
+			await self.client_update()
+			await asyncio.sleep(10)
 
 	async def connect(self):
 		while self.room_name is None:
@@ -186,17 +165,16 @@ class Client:
 			self.sounds_to_upload = LifoQueue()
 			self.recvbuf = b''
 
-			with config.lock:
-				ip = config.config['Network'].get('ServerIP', 'kiwec.net')
-				port = config.config['Network'].getint('ServerPort', 4004)
-				ssl = config.config['Network'].getboolean('SSL', False)
-				if ssl is False:
-					ssl = None
+			ip = config.config['Network'].get('ServerIP', 'kiwec.net')
+			port = config.config['Network'].getint('ServerPort', 4004)
+			ssl = config.config['Network'].getboolean('SSL', False)
+			if ssl is False:
+				ssl = None
 
 			try:
 				self.reader, self.writer = await asyncio.open_connection(ip, port, ssl=ssl)
 				self.reconnect_timeout = 1
-				self.client_update()
+				await self.client_update()
 			except ConnectionRefusedError:
 				await asyncio.sleep(self.reconnect_timeout)
 				self.reconnect_timeout *= 2
@@ -206,8 +184,8 @@ class Client:
 	async def run(self):
 		while True:
 			if not self.state.is_alive():
-				self.request_sounds()
-				self.respond_sounds()
+				await self.request_sounds()
+				await self.respond_sounds()
 
 			# Send stuff
 			try:
@@ -216,10 +194,7 @@ class Client:
 				raw_header = len(raw_packet).to_bytes(4, byteorder='big')
 
 				if isinstance(packet, SoundResponse):
-					wx.CallAfter(
-						self.gui.SetStatusText,
-						f'Uploading sound {self.uploaded + 1}/{self.upload_total}...)'
-					)
+					self.gui.SetStatusText(f'Uploading sound {self.uploaded + 1}/{self.upload_total}...)')
 
 				self.writer.write(raw_header + raw_packet)
 				await self.writer.drain()
@@ -244,7 +219,7 @@ class Client:
 					self.recvbuf = self.recvbuf[recv_len+4:]
 					self.handle(protocol.deserialize(raw_packet))
 
-	def listen(self):
+	async def listen(self):
 		while True:
-			self.loop.run_until_complete(self.connect())
-			self.loop.run_until_complete(self.run())
+			await self.connect()
+			await self.run()

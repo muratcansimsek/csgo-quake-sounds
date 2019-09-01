@@ -190,18 +190,17 @@ if __name__ == '__main__':
 			continue
 		available_sounds.add(bytes.fromhex(filename))
 
-	with config.lock:
-		port = config.config['Network'].getint('ServerPort', 4004)
-		try:
-			sslctx = ssl.SSLContext()
-			sslctx.load_cert_chain(
-				config.config['Network'].get('certfile', 'certfile.crt'),
-				keyfile=config.config['Network'].get('keyfile', 'keyfile.key'),
-			)
-		except (FileNotFoundError, ssl.SSLError) as err:
-			print(f"Failed to initialize SSL : {err}")
-			print(f"Serving without encryption.")
-			sslctx = None
+	port = config.config['Network'].getint('ServerPort', 4004)
+	try:
+		sslctx = ssl.SSLContext()
+		sslctx.load_cert_chain(
+			config.config['Network'].get('certfile', 'certfile.crt'),
+			keyfile=config.config['Network'].get('keyfile', 'keyfile.key'),
+		)
+	except (FileNotFoundError, ssl.SSLError) as err:
+		print(f"Failed to initialize SSL : {err}")
+		print(f"Serving without encryption.")
+		sslctx = None
 
 	loop = asyncio.get_event_loop()
 	coro = loop.create_server(Connection, '0.0.0.0', port, ssl=sslctx)

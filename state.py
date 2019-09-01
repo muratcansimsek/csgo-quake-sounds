@@ -155,8 +155,7 @@ class PlayerState:
                 # Headshot
                 if self.round_headshots == old_state.round_headshots + 1:
                     # Headshot override : always play Headshot
-                    with config.lock:
-                        prefer_headshots = config.config['Sounds'].getboolean('PreferHeadshots', False)
+                    prefer_headshots = config.config['Sounds'].getboolean('PreferHeadshots', False)
                     if prefer_headshots:
                         self.sounds.send(GameEvent.Type.HEADSHOT, self)
                         return

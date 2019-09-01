@@ -1,13 +1,14 @@
 """Related to sounds"""
+import asyncio
 import hashlib
 import os
 import random
-import threading
-from concurrent.futures.thread import ThreadPoolExecutor
+import wx
+from concurrent.futures import ThreadPoolExecutor
 from openal import AL_PLAYING, PYOGG_AVAIL, Buffer, OpusFile, Source  # type: ignore
-from time import sleep
 from threading import Lock
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
+from wxasync import StartCoroutine
 
 import config
 from protocol import GameEvent, PlaySound, SoundResponse
@@ -20,6 +21,7 @@ class SoundManager:
         self.playerid = None
         self.client = client
         self.lock = Lock()
+        self.nb_max_sounds = 0
 
         # List of available sounds (filepath:hash dict).
         self.available_sounds: Dict[str, str] = {}
@@ -29,8 +31,7 @@ class SoundManager:
 
         self.personal_sounds: List[bytes] = []
 
-        with config.lock:
-            self.volume = config.config['Sounds'].getint('Volume', 50)
+        self.volume = config.config['Sounds'].getint('Volume', 50)
 
     def max_sounds(self) -> int:
         """Returns the number of sounds that will be loaded."""
@@ -44,11 +45,7 @@ class SoundManager:
                 max = max + 1
         return max
 
-    def load(self, filepath: str, file_callback: Callable[[], None]) -> None:
-        self.load_sync(filepath)
-        file_callback()
-
-    def load_sync(self, filepath: str) -> Optional[Buffer]:
+    def load(self, filepath: str) -> Optional[Buffer]:
         hash = hashlib.blake2b()
         with open(filepath, 'rb') as infile:
             hash.update(infile.read())
@@ -61,30 +58,51 @@ class SoundManager:
         with self.lock:
             self.loaded_sounds[digest] = Buffer(OpusFile(filepath))
             self.available_sounds[filepath] = digest.hex()
+            wx.CallAfter(
+                self.client.gui.SetStatusText,
+                f'Loading sounds... ({len(self.loaded_sounds)}/{self.nb_max_sounds})'
+            )
             return self.loaded_sounds[digest]
 
-    def reload(self, file_callback: Callable[[], None], error_callback: Callable[[str], None]) -> None:
-        """Reloads the list of available sounds."""
+    async def reload(self) -> None:
+        """Reloads the list of available sounds.
+
+        The async logic is a bit complicated here, but it boils down to the following :
+        - No more than 5 sounds will be loaded at the same time
+        - Every sound is getting loaded in a separate thread, so the GUI is not blocked
+        - We're not waiting using the executor (sync) but by waiting for all tasks to end (async)
+        """
         with self.lock:
             self.available_sounds = {}
             self.loaded_sounds = {}
+            self.nb_max_sounds = self.max_sounds()
 
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            for path in os.listdir('sounds'):
-                for file in os.listdir(os.path.join('sounds', path)):
-                    if file.startswith('.git') or file == 'desktop.ini':
+        executor = ThreadPoolExecutor(max_workers=5)
+        loop = asyncio.get_running_loop()
+        tasks = []
+        for path in os.listdir('sounds'):
+            for file in os.listdir(os.path.join('sounds', path)):
+                if file.startswith('.git') or file == 'desktop.ini':
+                    continue
+
+                filepath = os.path.join('sounds', path, file)
+                if path == 'Downloaded':
+                    with self.lock:
+                        self.available_sounds[filepath] = file
+                else:
+                    if os.stat(filepath).st_size > 2 * 1024 * 1024:
+                        dialog = wx.GenericMessageDialog(
+                            self.client.gui,
+                            message=f'File {filepath} is too large (over 2 Mb) and will not be loaded.',
+                            caption='Sound loading error',
+                            style=wx.OK | wx.ICON_ERROR
+                        )
+                        dialog.ShowModal()
                         continue
 
-                    filepath = os.path.join('sounds', path, file)
-                    if path == 'Downloaded':
-                        with self.lock:
-                            self.available_sounds[filepath] = file
-                    else:
-                        if os.stat(filepath).st_size > 2 * 1024 * 1024:
-                            error_callback('File %s is too large (over 2 Mb) and will not be loaded.' % filepath)
-                            continue
-
-                        executor.submit(self.load, filepath, file_callback)
+                    tasks.append(loop.run_in_executor(executor, self.load, filepath))
+        executor.shutdown(wait=False)
+        await asyncio.gather(*tasks)
 
     def get_random(self, type, state) -> Optional[bytes]:
         """Get a sample from its sound name"""
@@ -111,18 +129,17 @@ class SoundManager:
         print(f'[!] No available samples for action "{sound}".')
         return None
 
-    def _play(self, sound) -> None:
-        """Play sound from its file path. Blocking call."""
+    async def _play(self, sound) -> None:
+        """Play sound from its file path."""
         sound = Source(sound)
         # gain can be between 0.0 and 2.0 with the GUI's volume slider
-        with self.lock:
-            gain: float = 0.0 if self.volume == 0 else self.volume / 50.0
-            sound.set_gain(gain)
+        gain: float = 0.0 if self.volume == 0 else self.volume / 50.0
+        sound.set_gain(gain)
         sound.play()
 
         while sound.get_state() == AL_PLAYING:
             # Don't end the thread until the sound finished playing
-            sleep(1)
+            await asyncio.sleep(1)
 
     def play(self, packet: PlaySound) -> bool:
         """Tries playing a sound from a PlaySound packet.
@@ -145,7 +162,7 @@ class SoundManager:
                 print(f'[!] Sound {small_hash(packet.sound_hash)} not found.')
                 return False
             else:
-                threading.Thread(target=self._play, args=(sound,), daemon=True).start()
+                StartCoroutine(self._play(sound), self.client.gui)
                 return True
 
     def save(self, packet: SoundResponse) -> None:

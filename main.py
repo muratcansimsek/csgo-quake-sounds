@@ -1,9 +1,11 @@
 """Plays quake sounds according to CSGO Gamestate"""
+import asyncio
 import winreg  # type: ignore
 import wx  # type: ignore  # type: ignore
-from openal import oalInit  # type: ignore
+from openal import oalInit, oalQuit  # type: ignore
 from shutil import copyfile
 from steamfiles import acf  # type: ignore
+from wxasync import WxAsyncApp
 
 # Local files
 import gui
@@ -51,13 +53,14 @@ def main():
 		copyfile("gamestate_integration_ccs.cfg", csgo_dir + "\\csgo\\cfg\\gamestate_integration_ccs.cfg")
 
 	oalInit()
-	app = wx.App()
+	loop = asyncio.get_event_loop()
+	app = WxAsyncApp()
 	gui.MainFrame(None, title="CSGO Custom Sounds", size=wx.Size(320, 340), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
-	app.MainLoop()
+	loop.run_until_complete(app.MainLoop())
 
 	# Devices might not always be ready to get closed - but OS will clean up anyway,
 	# so we can leave this line commented out
-	# oalQuit()
+	oalQuit()
 
 if __name__ == "__main__":
 	main()

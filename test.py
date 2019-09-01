@@ -1,10 +1,10 @@
+import asyncio
 import hashlib
 import os
 import random
 import shutil
 import threading
 import unittest
-from time import sleep
 from unittest.mock import patch, MagicMock, Mock
 from typing import Callable
 
@@ -12,7 +12,7 @@ import sounds
 import server
 from config import config
 from client import Client
-from packets_pb2 import GameEvent
+from protocol import GameEvent
 from state import CSGOState
 
 
@@ -49,24 +49,17 @@ class MockState(CSGOState):
 		return False  # always download/upload sounds
 
 
-class MockSoundManager(sounds.SoundManager):
-	def load(self, filepath: str, file_callback: Callable[[], None]) -> None:
-		hash = hashlib.blake2b()
-		with open(filepath, 'rb') as infile:
-			hash.update(infile.read())
-			digest = hash.digest()
-		with self.lock:
-			self.available_sounds[filepath] = digest.hex()
-		file_callback()
-
-
 class MockClient(Client):
-	"""Simpler client for testing."""
+	"""Simpler client for testing.
+
+	TODO ASYNC REWRITE
+	"""
 
 	def __init__(self, steamid=random.randint(1, 999999999)):
 		self.gui = DummyGui()
 		self.room_name = 'shard_code'
-		self.sounds = MockSoundManager(self)
+		self.sounds = SoundManager(self)
+		self.loop = asyncio.get_event_loop()
 
 		# Mock stuff
 		self.sounds.play = Mock()
@@ -75,11 +68,17 @@ class MockClient(Client):
 		threading.Thread(target=self.listen, daemon=True).start()
 
 		# Wait for server connection before reloading sounds
-		sleep(0.1)
-		self.reload_sounds()
+		asyncio.sleep(0.1)
+		await self.reload_sounds()
 
 	def error_callback(self, msg):
 		raise Exception(msg)
+
+
+async def run_server(loop):
+	global server
+	coro = loop.create_server(server.Connection, '127.0.0.1', 4004, ssl=None)
+	server = await loop.run_until_complete(coro)
 
 
 class TestClient(unittest.TestCase):
@@ -98,8 +97,8 @@ class TestClient(unittest.TestCase):
 		# Run a local sound server
 		config.set('Network', 'ServerIP', '127.0.0.1')
 		config.set('Network', 'ServerPort', '4004')
-		self.server = server.Server()
-		threading.Thread(target=self.server.serve, daemon=True).start()
+		loop = asyncio.new_event_loop()
+		asyncio.create_task(run_server(loop))
 		sleep(1)  # Wait for server to start (shh it's fine)
 
 	def tearDown(self):
@@ -108,7 +107,6 @@ class TestClient(unittest.TestCase):
 		except:
 			pass
 
-	@patch('wx.CallAfter')
 	def test_receive_sound(self, *args):
 		# Alice will send basic stuff
 		alice = MockClient('123123123')
@@ -125,25 +123,24 @@ class TestClient(unittest.TestCase):
 		charlie = MockClient('789789789')
 		sleep(1)
 
-		with self.server.clients_lock:
-			self.assertEqual(len(self.server.clients), 3)
+		self.assertEqual(len(server.rooms[0].clients), 3)
 
 		# Send a sound, and assert it is received by bob
-		alice.sounds.send(GameEvent.COLLATERAL, alice.state)
+		alice.sounds.send(GameEvent.Type.COLLATERAL, alice.state)
 		sleep(1)
 		self.assertEqual(bob.sounds.play.call_count, 2)
 
 		# Try MVPs
-		alice.sounds.send(GameEvent.MVP, alice.state)
+		alice.sounds.send(GameEvent.Type.MVP, alice.state)
 		sleep(1)
 		self.assertEqual(bob.sounds.play.call_count, 3)
 		alice.state.current_round = 2
-		alice.sounds.send(GameEvent.MVP, alice.state)
+		alice.sounds.send(GameEvent.Type.MVP, alice.state)
 		sleep(1)
 		self.assertEqual(bob.sounds.play.call_count, 4)
 
 		# Try charlie's custom sound
-		charlie.sounds.send(GameEvent.TIMEOUT, charlie.state)
+		charlie.sounds.send(GameEvent.Type.TIMEOUT, charlie.state)
 		sleep(2)
 		self.assertEqual(bob.sounds.play.call_count, 5)
 
