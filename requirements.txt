@@ -1,6 +1,0 @@
-pathlib2~=2.3
-wxasync~=0.4
-packel~=1.0
-PyOgg==0.6.11a1
-PyOpenAL==0.7.6a1
-git+git://github.com/leovp/steamfiles.git@master

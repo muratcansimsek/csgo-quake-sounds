@@ -17,6 +17,7 @@ from util import print, get_event_class, small_hash
 
 class SoundManager:
     """Loads and plays sounds"""
+
     def __init__(self, client) -> None:
         self.playerid = None
         self.client = client
@@ -31,23 +32,23 @@ class SoundManager:
 
         self.personal_sounds: List[bytes] = []
 
-        self.volume = config.config['Sounds'].getint('Volume', 50)
+        self.volume = config.config["Sounds"].getint("Volume", 50)
 
     def max_sounds(self) -> int:
         """Returns the number of sounds that will be loaded."""
         max = 0
-        for path in os.listdir('sounds'):
-            if path == 'Downloaded':
+        for path in os.listdir("sounds"):
+            if path == "Downloaded":
                 continue
-            for file in os.listdir(os.path.join('sounds', path)):
-                if file.startswith('.git') or file == 'desktop.ini':
+            for file in os.listdir(os.path.join("sounds", path)):
+                if file.startswith(".git") or file == "desktop.ini":
                     continue
                 max = max + 1
         return max
 
     def load(self, filepath: str) -> Optional[Buffer]:
         hash = hashlib.blake2b()
-        with open(filepath, 'rb') as infile:
+        with open(filepath, "rb") as infile:
             hash.update(infile.read())
             digest = hash.digest()
 
@@ -60,7 +61,7 @@ class SoundManager:
             self.available_sounds[filepath] = digest.hex()
             wx.CallAfter(
                 self.client.gui.SetStatusText,
-                f'Loading sounds... ({len(self.loaded_sounds)}/{self.nb_max_sounds})'
+                f"Loading sounds... ({len(self.loaded_sounds)}/{self.nb_max_sounds})",
             )
             return self.loaded_sounds[digest]
 
@@ -80,22 +81,22 @@ class SoundManager:
         executor = ThreadPoolExecutor(max_workers=5)
         loop = asyncio.get_running_loop()
         tasks = []
-        for path in os.listdir('sounds'):
-            for file in os.listdir(os.path.join('sounds', path)):
-                if file.startswith('.git') or file == 'desktop.ini':
+        for path in os.listdir("sounds"):
+            for file in os.listdir(os.path.join("sounds", path)):
+                if file.startswith(".git") or file == "desktop.ini":
                     continue
 
-                filepath = os.path.join('sounds', path, file)
-                if path == 'Downloaded':
+                filepath = os.path.join("sounds", path, file)
+                if path == "Downloaded":
                     with self.lock:
                         self.available_sounds[filepath] = file
                 else:
                     if os.stat(filepath).st_size > 2 * 1024 * 1024:
                         dialog = wx.GenericMessageDialog(
                             self.client.gui,
-                            message=f'File {filepath} is too large (over 2 Mb) and will not be loaded.',
-                            caption='Sound loading error',
-                            style=wx.OK | wx.ICON_ERROR
+                            message=f"File {filepath} is too large (over 2 Mb) and will not be loaded.",
+                            caption="Sound loading error",
+                            style=wx.OK | wx.ICON_ERROR,
                         )
                         dialog.ShowModal()
                         continue
@@ -106,24 +107,35 @@ class SoundManager:
 
     def get_random(self, type, state) -> Optional[bytes]:
         """Get a sample from its sound name"""
-        if type == GameEvent.Type.MVP: sound = 'MVP'
-        elif type == GameEvent.Type.ROUND_WIN: sound = 'Round win'
-        elif type == GameEvent.Type.ROUND_LOSE: sound = 'Round lose'
-        elif type == GameEvent.Type.SUICIDE: sound = 'Suicide'
-        elif type == GameEvent.Type.TEAMKILL: sound = 'Teamkill'
-        elif type == GameEvent.Type.DEATH: sound = 'Death'
-        elif type == GameEvent.Type.FLASH: sound = 'Flashed'
-        elif type == GameEvent.Type.KNIFE: sound = 'Unusual kill'
-        elif type == GameEvent.Type.HEADSHOT: sound = 'Headshot'
-        elif type == GameEvent.Type.KILL: sound = '%d kills' % state.round_kills
-        elif type == GameEvent.Type.COLLATERAL: sound = 'Collateral'
-        elif type == GameEvent.Type.ROUND_START: sound = 'Round start'
-        elif type == GameEvent.Type.TIMEOUT: sound = 'Timeout'
+        if type == GameEvent.Type.MVP:
+            sound = "MVP"
+        elif type == GameEvent.Type.SUICIDE:
+            sound = "Suicide"
+        elif type == GameEvent.Type.TEAMKILL:
+            sound = "Teamkill"
+        elif type == GameEvent.Type.DEATH:
+            sound = "Death"
+        elif type == GameEvent.Type.FLASH:
+            sound = "Flashed"
+        elif type == GameEvent.Type.KNIFE:
+            sound = "Unusual kill"
+        elif type == GameEvent.Type.HEADSHOT:
+            sound = "Headshot"
+        elif type == GameEvent.Type.KILL:
+            sound = f"{state.round_kills} kills"
+        elif type == GameEvent.Type.COLLATERAL:
+            sound = "Collateral"
+        elif type == GameEvent.Type.ROUND_START:
+            sound = "Round start"
+        elif type == GameEvent.Type.TIMEOUT:
+            sound = "Timeout"
 
         with self.lock:
             sounds = self.available_sounds.items()
-        sound_path = os.path.join('sounds', sound)
-        collection: List[bytes] = [bytes.fromhex(v) for k, v in sounds if k.startswith(sound_path)]
+        sound_path = os.path.join("sounds", sound)
+        collection: List[bytes] = [
+            bytes.fromhex(v) for k, v in sounds if k.startswith(sound_path)
+        ]
         if len(collection) > 0:
             return random.choice(collection)
         print(f'[!] No available samples for action "{sound}".')
@@ -154,25 +166,25 @@ class SoundManager:
             try:
                 sound = self.loaded_sounds[packet.sound_hash]
             except KeyError:
-                filepath = os.path.join('sounds', 'Downloaded', packet.sound_hash.hex())
+                filepath = os.path.join("sounds", "Downloaded", packet.sound_hash.hex())
                 if filepath in self.available_sounds.keys():
                     sound = self.load_sync(filepath)
 
             if sound is None:
-                print(f'[!] Sound {small_hash(packet.sound_hash)} not found.')
+                print(f"[!] Sound {small_hash(packet.sound_hash)} not found.")
                 return False
             else:
                 StartCoroutine(self._play(sound), self.client.gui)
                 return True
 
     def save(self, packet: SoundResponse) -> None:
-        filepath = os.path.join('sounds', 'Downloaded', packet.hash.hex())
-        with open(filepath, 'wb') as outfile:
+        filepath = os.path.join("sounds", "Downloaded", packet.hash.hex())
+        with open(filepath, "wb") as outfile:
             outfile.write(packet.data)
         filename = packet.hash.hex()
         with self.lock:
             self.available_sounds[filepath] = filename
-        print(f'Finished downloading {small_hash(packet.hash)}.')
+        print(f"Finished downloading {small_hash(packet.hash)}.")
 
     def send(self, update_type, state) -> None:
         """Sends a sound to play for everybody"""
@@ -189,7 +201,7 @@ class SoundManager:
             self.client.send(packet)
 
             # Normal event : play without waiting for server
-            if get_event_class(packet) == 'normal':
+            if get_event_class(packet) == "normal":
                 playpacket = PlaySound()
                 playpacket.steamid = 0
                 playpacket.sound_hash = hash

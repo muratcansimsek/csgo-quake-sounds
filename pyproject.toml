@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "csgo-quake-sounds"
+version = "1.5.0"
+description = "Play quake sounds via Gamestate Integration"
+authors = ["kiwec"]
+license = "UNLICENSE"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+PyOgg = "=0.6.11a1"
+PyOpenAL = "=0.7.9a1"
+wxasync = "^0.41.0"
+steamfiles = {git = "https://github.com/leovp/steamfiles.git"}
+aiofiles = "^0.4.0"
+packel = "^1.0"
+
+[tool.dephell.main]
+from = {format = "poetry", path = "pyproject.toml"}
+to = {format = "setuppy", path = "setup.py"}
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
