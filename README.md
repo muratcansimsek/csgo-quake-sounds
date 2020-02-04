@@ -16,18 +16,30 @@ Yes.
 
 * How do I add my own sounds ?
 
-Yes. Just drop them in the corresponding `sounds` folder.
+Drop your sounds in the corresponding `sounds` folder. Feel free to remove the ones you don't like, too.
 
-As of right now, only OPUS files are supported. More formats will come soon.
-
-Feel free to remove the ones you don't like, too.
+Please keep in mind that only OPUS files are supported.
 
 ### Running
 
 You probably want to use the [installer](https://github.com/kiwec/csgo-quake-sounds/releases/latest).
 
-However, if you want to try the latest version or host your own server, follow the instructions in [RUNNING.md](https://github.com/kiwec/csgo-quake-sounds/blob/master/RUNNING.md).
+However, if you want to try the latest version, execute these commands :
+
+* `git clone https://github.com/kiwec/csgo-quake-sounds.git && cd csgo-quake-sounds`
+
+* `python setup.py install --user`
+
+Then, run it :
+
+* `python main.py`
 
 ### Building
 
-If you want to build your own installer, follow the instructions in [BUILDING.md](https://github.com/kiwec/csgo-quake-sounds/blob/master/BUILDING.md).
+Run the following commands :
+
+* `python setup.py install --user`
+
+* `pip install cx_Freeze`
+
+* Run `python build.py build`

@@ -4,11 +4,11 @@ import os
 import wx  # type: ignore  # type: ignore
 from openal import oalInit, oalQuit  # type: ignore
 from shutil import copyfile
-from steamfiles import acf  # type: ignore
-from wxasync import WxAsyncApp
+from wxasync import WxAsyncApp  # type: ignore
 
 # Local files
 import gui
+import steamfiles
 
 
 def get_steam_path() -> str:
@@ -31,7 +31,7 @@ def get_steam_path() -> str:
 def get_csgo_path(steamapps_folder):
     # Get every SteamLibrary folder
     with open(os.path.join(steamapps_folder, "libraryfolders.vdf")) as infile:
-        libraryfolders = acf.load(infile)
+        libraryfolders = steamfiles.load(infile)
     folders = [steamapps_folder]
     i = 1
     while True:
@@ -51,7 +51,7 @@ def get_csgo_path(steamapps_folder):
             appmanifest = os.path.join(folder, "appmanifest_730.acf")
             print(f"Opening appmanifest {appmanifest}...")
             with open(appmanifest) as infile:
-                appmanifest = acf.load(infile)
+                appmanifest = steamfiles.load(infile)
                 installdir = os.path.join(
                     folder, "common", appmanifest["AppState"]["installdir"]
                 )
@@ -79,7 +79,7 @@ def main():
     gui.MainFrame(
         None,
         title="CSGO Custom Sounds",
-        size=wx.Size(320, 340),
+        size=wx.Size(320, 230),
         style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX),
     )
     loop.run_until_complete(app.MainLoop())

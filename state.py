@@ -4,7 +4,6 @@ from threading import Lock, Thread
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import config
-from protocol import GameEvent
 
 
 class PlayerState:
@@ -84,7 +83,7 @@ class PlayerState:
 
         self.valid = True
 
-    def compare(self, old_state):
+    def compare(self, old_state) -> None:
         # Init state without playing sounds
         if not old_state or not old_state.valid:
             return
@@ -111,7 +110,7 @@ class PlayerState:
 
         # Play timeout music
         if self.phase == "freezetime" and self.play_timeout:
-            self.sounds.send(GameEvent.Type.TIMEOUT, self)
+            self.sounds.play("Timeout")
             self.play_timeout = False
 
         # Reset state when switching players (used for MVPs)
@@ -121,9 +120,12 @@ class PlayerState:
 
         # Play round start, win, lose, MVP
         if self.is_local_player and self.mvps == old_state.mvps + 1:
-            self.sounds.send(GameEvent.Type.MVP, self)
-        elif self.phase == "live" and self.phase != old_state.phase:
-            self.sounds.send(GameEvent.Type.ROUND_START, self)
+            self.sounds.play("MVP")
+        elif self.phase != old_state.phase:
+            if self.phase == "over" and self.mvps == old_state.mvps:
+                self.sounds.play("Round win" if self.won_round else "Round lose")
+            elif self.phase == "live":
+                self.sounds.play("Round start")
 
         # Don't play player-triggered sounds below this ##########
         if not self.is_local_player:
@@ -133,49 +135,41 @@ class PlayerState:
         # Lost kills - either teamkilled or suicided
         if self.total_kills < old_state.total_kills:
             if self.total_deaths == old_state.total_deaths + 1:
-                self.sounds.send(GameEvent.Type.SUICIDE, self)
+                self.sounds.play("Suicide")
             elif self.total_deaths == old_state.total_deaths:
-                self.sounds.send(GameEvent.Type.TEAMKILL, self)
+                self.sounds.play("Teamkill")
         # Didn't suicide or teamkill -> check if player just died
         elif self.total_deaths == old_state.total_deaths + 1:
-            self.sounds.send(GameEvent.Type.DEATH, self)
+            self.sounds.play("Death")
 
         # Player got flashed
         if self.flash_opacity > 150 and self.flash_opacity > old_state.flash_opacity:
-            self.sounds.send(GameEvent.Type.FLASH, self)
+            self.sounds.play("Flashed")
 
         # Player killed someone
         if self.round_kills == old_state.round_kills + 1:
             # Kill with knife equipped
             if self.is_knife_active:
-                self.sounds.send(GameEvent.Type.KNIFE, self)
+                self.sounds.play("Unusual kill")
             # Kill with weapon equipped
             else:
-                # Headshot
-                if self.round_headshots == old_state.round_headshots + 1:
-                    # Headshot override : always play Headshot
-                    prefer_headshots = config.config["Sounds"].getboolean(
-                        "PreferHeadshots", False
-                    )
-                    if prefer_headshots:
-                        self.sounds.send(GameEvent.Type.HEADSHOT, self)
-                        return
-                    # No headshot override : do not play over double kills, etc
-                    if self.round_kills < 2 or self.round_kills > 5:
-                        self.sounds.send(GameEvent.Type.HEADSHOT, self)
+                # Prefer playing "Headshot" over "x kills"
+                prefer_headshots = config.config["Sounds"].getboolean(  # type: ignore
+                    "PreferHeadshots", False
+                )
 
-                # Killstreaks, headshotted or not
-                if self.round_kills == 2:
-                    self.sounds.send(GameEvent.Type.KILL, self)
-                elif self.round_kills == 3:
-                    self.sounds.send(GameEvent.Type.KILL, self)
-                elif self.round_kills == 4:
-                    self.sounds.send(GameEvent.Type.KILL, self)
-                elif self.round_kills == 5:
-                    self.sounds.send(GameEvent.Type.KILL, self)
+                if self.round_headshots == old_state.round_headshots + 1:
+                    if prefer_headshots:
+                        self.sounds.play("Headshot")
+                    else:
+                        self.sounds.play(
+                            f"{self.round_kills} kills"
+                        ) or self.sounds.play("Headshot")
+                else:
+                    self.sounds.play(f"{self.round_kills} kills")
         # Player killed multiple players
         elif self.round_kills > old_state.round_kills:
-            self.sounds.send(GameEvent.Type.COLLATERAL, self)
+            self.sounds.play("Collateral")
 
 
 class CSGOState:
@@ -205,19 +199,10 @@ class CSGOState:
 
     def update(self, json):
         """Update the entire game state"""
-        should_update_client = False
         with self.lock:
             newstate = PlayerState(json, self.client.sounds)
-
-            if self.old_state == None or self.old_state.steamid != newstate.steamid:
-                should_update_client = True
-
             newstate.compare(self.old_state)
             self.old_state = newstate
-        if self.client != None:
-            self.client.update_status()
-            if should_update_client:
-                self.client.client_update()
 
 
 class PostHandler(BaseHTTPRequestHandler):
