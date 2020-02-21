@@ -84,9 +84,12 @@ def main():
     )
     loop.run_until_complete(app.MainLoop())
 
-    # Devices might not always be ready to get closed - but OS will clean up anyway,
-    # so we can leave this line commented out
-    oalQuit()
+    # Freeing OpenAL buffers might fail if they are still in use
+    # We don't really care since the OS will clean up anyway.
+    try:
+        oalQuit()
+    except:  # noqa
+        pass
 
 
 if __name__ == "__main__":

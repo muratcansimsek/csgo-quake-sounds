@@ -4,4 +4,4 @@ __pycache__
 
 build/
 dist/
-csgo_quake_sounds.egg-info/
+*.egg-info/

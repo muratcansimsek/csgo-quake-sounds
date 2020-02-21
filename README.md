@@ -6,13 +6,13 @@ Custom sounds in your Counter-Strike : Global Offensive matches.
 
 ### FAQ
 
-* Will I get banned for using this ?
-
-No. This is using [Game State Integration](https://developer.valvesoftware.com/wiki/Counter-Strike:_Global_Offensive_Game_State_Integration), which is allowed by Valve.
-
 * Does it work in matchmaking ? On faceit ?
 
 Yes.
+
+* Will I get banned for using this ?
+
+No. This is using [Game State Integration](https://developer.valvesoftware.com/wiki/Counter-Strike:_Global_Offensive_Game_State_Integration), which is allowed by Valve.
 
 * How do I add my own sounds ?
 

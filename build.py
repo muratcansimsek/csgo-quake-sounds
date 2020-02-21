@@ -21,7 +21,7 @@ executables = [Executable("main.py", base=base, targetName="csgo-custom-sounds.e
 
 setup(
     name="csgo-custom-sounds",
-    version="1.5",
+    version="1.5.1",
     description="Play custom sounds via Gamestate Integration",
     options=dict(build_exe=buildOptions),
     executables=executables,

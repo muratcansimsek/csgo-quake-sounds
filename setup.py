@@ -6,7 +6,7 @@ except ImportError:
 
 setup(
     name="csgo-custom-sounds",
-    version="1.5.0",
+    version="1.5.1",
     description="Play custom sounds via Gamestate Integration",
     python_requires="==3.*,>=3.7.0",
     author="kiwec",
