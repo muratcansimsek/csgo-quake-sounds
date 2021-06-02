@@ -3,6 +3,7 @@ import asyncio
 import os
 import wx  # type: ignore  # type: ignore
 from openal import oalInit, oalQuit  # type: ignore
+from pathlib import Path
 from shutil import copyfile
 from wxasync import WxAsyncApp  # type: ignore
 
@@ -25,7 +26,7 @@ def get_steam_path() -> str:
         winreg.CloseKey(key)
         return value
     else:
-        return "~/.steam/root"
+        return os.path.join(Path.home(), ".steam/root")
 
 
 def get_csgo_path(steamapps_folder):
@@ -65,8 +66,7 @@ def get_csgo_path(steamapps_folder):
 
 def main():
     # Ensure gamestate integration cfg is in csgo's cfg directory
-    # TODO linux
-    csgo_dir = get_csgo_path(get_steam_path() + "\\steamapps")
+    csgo_dir = get_csgo_path(os.path.join(get_steam_path(), "steamapps"))
     if csgo_dir is not None:
         copyfile(
             "gamestate_integration_ccs.cfg",
