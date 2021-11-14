@@ -1,3 +1,5 @@
+I forked Kiwec's project. It's the same version but I replaced the voices with female voices. I couldn't change some sounds, even that is enjoyable.
+
 # csgo-quake-sounds
 
 Custom sounds in your Counter-Strike : Global Offensive matches.
